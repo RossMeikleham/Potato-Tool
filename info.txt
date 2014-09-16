@@ -1,0 +1,123 @@
+-- Potato Tool
+-- vmu is 128kb file
+-- first 28kb reserved for system
+-- last 100kb split into 200 blocks each block = 512 bytes
+--
+-- DCI files store data in Big Endian format
+
+-- VMS --
+
+vms description   0x00 - 0x0F
+rom description   0x10 - 0x2F
+application       0x30 - 0x3F // Application identifier
+icon count        0x40 - 0x41 // number of icons, > 1 if animated
+animation speed   0x42 - 0x43 // icon animation speed
+eyecatch          0x44 - 0x45 // graphic eyecatch (0 for none)
+checksum          0x46 - 0x47 /* ignored for game data */
+data size         0x48 - 0x4B /* ignored for game data */
+reserved          0x4C - 0x5F
+pallete           0x60 - 0x7F // Icon pallete 16 16 bit integers
+icons             0x80 - 0x27F //icon for save to display 32x32 bitmap, each byte contains 2 pixels, 16 colours
+
+-- VMI --
+
+vmi checksum	0x00 - 0x03	/*  4 bytes */
+vmi title		0x04 - 0x23	/* 32 bytes */
+vmi creator		0x24	/* 32 bytes copyright */
+vmi year		0x44	/*  2 bytes creation date of vmi */
+vmi month		0x46
+vmi day		    0x47
+vmi hour		0x48
+vmi minute	    0x49
+vmi second		0x4A
+vmi weekday		0x4B
+vmi version		0x4C	/*  2 bytes */
+vmi file count	0x4E	/*  2 bytes amount of files to download*/
+vmi resource	0x50    /*  8 bytes vms file name*/
+vmi file name	0x58	/* 12 bytes file name displayed on vmu*/
+vmi file type	0x64	/*  either 0x00 DATA or 0x03 GAME*/
+padding 3 bytes
+vmi file size	0x68	/*  2 bytes size of vms*/
+padding 2 bytes
+
+
+-- Start block of save must contain info on block count
+-- Each save has a type, a creation date a description
+-- Bitmap for vmu also stored
+
+-- VMU Layout --
+-- 0 - 199 blocks, user saves/data
+-- 200 - 239 unused
+-- 240 - 253 directory
+-- 254 FAT
+-- 255 Root Block
+
+-- Root Block --
+0x000-0x00f : All these bytes contain 0x55 to indicate a properly formatted card.
+0x010       : custom VMS colour (1 = use custom colours below, 0 = standard colour)
+0x011       : VMS colour blue component
+0x012       : VMS colour green component
+0x013       : VMS colour red component
+0x014       : VMS colour alpha component (use 100 for semi-transparent, 255 for opaque)
+0x015-0x02f : not used (all zeroes)
+0x030-0x037 : BCD timestamp (see Directory below)
+0x038-0x03f : not used (all zeroes)
+...
+0x046-0x047 : 16 bit int (little endian) : location of FAT (254)
+0x048-0x049 : 16 bit int (little endian) : size of FAT in blocks (1)
+0x04a-0x04b : 16 bit int (little endian) : location of directory (253)
+0x04c-0x04d : 16 bit int (little endian) : size of directory in blocks (13)
+0x04e-0x04f : 16 bit int (little endian) : icon shape for this VMS (0-123)
+0x050-0x051 : 16 bit int (little endian) : number of user blocks (200)
+
+
+
+
+-- FAT --
+1 block containing 512 bytes, each 16bits contains information for that block
+0xfffc    :  This block is unallocated
+0xfffa    :  This block is allocated to a file, and is the last block in that file
+0x00-0xff :  This block is allocated to a file, and is not the last block in that file,
+             this gives the number of the next block. 
+
+Mini games are located from block 0 upwards and are stored linearly
+Save Data is stored from block 199 downwards
+
+
+
+-- Directory --
+
+200 entires, 32bytes per entry, block 253 is first, 241 last
+
+
+An entry in the directory is either all NUL-bytes (denoting an unused entry), or a structure describing a file. This structure looks as follows:
+
+0x00      : 8 bit int : file type (0x00 = no file, 0x33 = data, 0xcc = game)
+0x01      : 8 bit int : copy protect (0x00 = copy ok, 0xff = copy protected)
+0x02-0x03 : 16 bit int (little endian) : location of first block
+0x04-0x0f : ASCII string : filename (12 characters)
+0x10-0x17 : BCD timestamp (see below) : file creation time
+0x18-0x19 : 16 bit int (little endian) : file size (in blocks)
+0x1a-0x1b : 16 bit int (little endian) : offset of header (in blocks) from file start
+0x1c-0x1f : unused (all zero)
+
+The file creation time is stored as a sequence of BCD (Binary Coded Decimal) bytes. Each byte represents a number between 0 and 99. The meaning of the bytes are as follows:
+
+Century (e.g. 19)
+Year within century (e.g. 99)
+Month within year (e.g. 11)
+Day within month (e.g. 1)
+Hour of day (e.g. 22)
+Minute of hour (e.g. 50)
+Second of minute (e.g. 12)
+Day of week (0 = monday, 6 = sunday)
+
+
+DCM, raw dump but bytes have been reverse in groups of 4
+DCI files, contains blocks of a single file, first 32 bytes contains directory entry, location
+of first block should be ignored, blocks are byte-swapped
+
+
+
+
+
