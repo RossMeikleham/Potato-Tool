@@ -1,4 +1,11 @@
-module VMU (VMU(files), rawDumpFile, getBlocks, getFreeBlocks, createVMU) where 
+module VMU 
+( VMU(files) 
+, DirectoryEntry(fileType,copyProtected,startingBlock,fileName,sizeInBlocks)
+, rawDumpFile 
+, getBlocks
+, getFreeBlocks
+, createVMU
+) where 
 
 import Data.Word
 import Data.Binary
@@ -8,7 +15,7 @@ import Data.List.Split
 import qualified Data.ByteString.Lazy as BS
 import Data.Bits
 import Control.Applicative
-
+import Text.Printf
 
 data VMU = VMU
  { root :: RootBlock

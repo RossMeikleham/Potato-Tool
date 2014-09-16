@@ -3,6 +3,31 @@ import System.IO
 import System.Environment
 import GHC.IO.Handle.FD
 import qualified Data.ByteString.Lazy as BS
+import Text.Printf
+
+
+
+listFiles :: VMU -> String
+listFiles vmu = 
+    (printf titleFormat "" "Name" "Type" "Size" "StartBlock" "CopyProtected") ++
+    (listFiles' (files vmu) 0 fileFormat)
+
+    where titleFormat = "%5s  %-10s  %-4s  %-4s  %-10s  %-13s\n" 
+          fileFormat  = "%2d:  %-11s  %-4s  %-4s  %-10s  %-13s\n"
+
+listFiles' :: [DirectoryEntry] -> Int -> String -> String
+listFiles' [] no format = ""
+listFiles' (x:xs) no format =
+    (printf format fNo fName fType fSize fStart fCopy)  ++ 
+        (listFiles' xs (no+1) format)
+    where 
+          fNo = no
+          fName =  fileName x
+          fType =  (show . fileType) x
+          fSize =  (show . sizeInBlocks) x
+          fStart = (show . startingBlock) x
+          fCopy =  if copyProtected x then "Yes" else "No"
+
 
 main :: IO()
 main = do 
@@ -17,4 +42,4 @@ main = do
                     bs <- BS.readFile vmuFile 
                     case createVMU  bs of
                         Left str -> error str
-                        Right vmu -> putStrLn $ show $ files vmu
+                        Right vmu -> putStrLn $ listFiles vmu
