@@ -5,12 +5,14 @@ module VMU
 , getBlocks
 , getFreeBlocks
 , createVMU
+, getDirEntry
 ) where 
 
 import Data.Word
 import Data.Binary
 import Data.Maybe
 import Data.Char
+import Data.Either
 import Data.List.Split
 import qualified Data.ByteString.Lazy as BS
 import Data.Bits
@@ -154,30 +156,31 @@ createRootBlock fileStr =
 -- If file type is none or unrecognized value is read in
 -- then Nothing is returned as it is not a valid directory entry
 -- TODO possibly distinguish between corrupt and no file
-getDirEntry :: [Word8] -> Maybe DirectoryEntry
+getDirEntry :: [Word8] -> Either String DirectoryEntry
 getDirEntry entry = 
     DirectoryEntry <$> fType <*> protected <*> startingB <*> 
         name <*> sizeB <*> offsetB 
 
     where 
         fType = case entry !! 0x0 of
-                0x33 -> Just Data
-                0xCC -> Just Game
-                otherwise ->  Nothing
+                0x33 -> Right Data
+                0xCC -> Right Game
+                0x00 -> Left "File marked as empty"
+                otherwise -> Left ("Unknown type value" ++ (show entry))
     
         protected = case entry !! 0x1 of
-                0x00 -> Just False
-                0xFF -> Just True
-                otherwise -> Nothing
+                0x00 -> Right False
+                0xFF -> Right True
+                otherwise -> Left ("Unknown protected value" ++ (show entry))
 
-        startingB = Just $ encodeWord16 $ slice 0x2 0x3 entry
-        name = Just $ map (chr . fromEnum) $ slice 0x4 0xF entry
-        sizeB = Just $ encodeWord16 $ slice 0x18 0x19 entry
-        offsetB = Just $ encodeWord16 $ slice 0x1A 0x1B entry
+        startingB = Right $ encodeWord16 $ slice 0x2 0x3 entry
+        name = Right $ map (chr . fromEnum) $ slice 0x4 0xF entry
+        sizeB = Right $ encodeWord16 $ slice 0x18 0x19 entry
+        offsetB = Right $ encodeWord16 $ slice 0x1A 0x1B entry
 
 
 createDirectory :: RootBlock -> [Word8] -> [DirectoryEntry]
-createDirectory rb vmu = catMaybes entries
+createDirectory rb vmu = rights entries
     where dirBlockStart = fromIntegral $ locationDirectory rb
           noBlocks = fromIntegral $ sizeDirectory rb
           dirSizeBytes =  blockStart $ fromIntegral noBlocks
