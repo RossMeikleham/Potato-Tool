@@ -1,10 +1,15 @@
 import Data.Word
 import Data.Binary
+import Data.Maybe
+import Data.Char
 import System.IO
 import System.Environment
 import GHC.IO.Handle.FD
 import qualified Data.ByteString.Lazy as BS
+import qualified Data.ByteString.Lazy.Char8 as BSC
 import Data.Bits
+import Control.Applicative
+
 
 {-data Timestamp = 
     { century :: Word8
@@ -46,7 +51,7 @@ data DirectoryEntry = DirectoryEntry
     , offsetInBlocks :: Word16
     } deriving Show
 
-data FileType = NoFile | Game | Data deriving Show
+data FileType = Game | Data deriving Show
 
 vmuSize = 128 * 1024 --128KB vmu
 
@@ -85,8 +90,50 @@ getRootBlock fileStr =
               iconShape = encodeWord16 $ slice 0x4E 0x4F rootBlockStr
               userBlocks = encodeWord16 $ slice 0x50 0x51 rootBlockStr
 
+
+-- Read 32 Bytes entry into a Directory Entry
+-- If file type is none or unrecognized value is read in
+-- then Nothing is returned as it is not a valid directory entry
+-- TODO possibly distinguish between corrupt and no file
+getDirEntry :: [Word8] -> Maybe DirectoryEntry
+getDirEntry entry = 
+    DirectoryEntry <$> fType <*> protected <*> startingB <*> 
+        name <*> sizeB <*> offsetB 
+
+    where 
+        fType = case entry !! 0x0 of
+                0x33 -> Just Game
+                0xCC -> Just Data
+                otherwise ->  Nothing
+    
+        protected = case entry !! 0x1 of
+                0x00 -> Just False
+                0xFF -> Just True
+                otherwise -> Nothing
+
+        startingB = Just $ encodeWord16 $ slice 0x2 0x3 entry
+        name = Just $ map (chr . fromEnum) $ slice 0x4 0xF entry
+        sizeB = Just $ encodeWord16 $ slice 0x18 0x19 entry
+        offsetB = Just $ encodeWord16 $ slice 0x1A 0x1B entry
+
+getDirectory :: RootBlock -> [Word8] -> Directory
+getDirectory rb vmu = Directory $ catMaybes entries
+    where dirBlockStart = fromIntegral $ locationDirectory rb
+          noBlocks = fromIntegral $ sizeDirectory rb
+          dirSizeBytes =  blockStart $ fromIntegral noBlocks
+
+          entries = 
+            concatMap (entriesBlock) [dirBlockStart,dirBlockStart-1..dirBlockStart - noBlocks]
+
+          -- 16 32 bytes entries in 512 byte block
+          entriesBlock n = [getDirEntry $ 
+            slice ((blockStart n) + x * 32) ((blockStart n) - 1 + ((x + 1) * 32)) vmu | 
+                x <- [0..15]] 
+
+
 displayContents :: BS.ByteString -> String
-displayContents bs = show $ getRootBlock $ BS.unpack bs
+displayContents bs = show rb  ++ (show $ getDirectory rb (BS.unpack bs))
+    where rb = getRootBlock $ BS.unpack bs
 
 main :: IO()
 main = do 
