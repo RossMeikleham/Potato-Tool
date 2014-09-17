@@ -36,20 +36,35 @@ checkSize mem entry =
 exportVMUFileToRaw :: RawVMUFile -> [Word8]
 exportVMUFileToRaw v = 
     [fileTypeMem] ++  [protectedMem] ++ startBlocks ++ fileNameMem ++
-    blockSizeMem ++ headerOffset ++ blocksMem
+    timeStampMem ++ blockSizeMem ++ headerOffset ++ blocksMem
                     
-    where blocksMem = concat $ blocks v
-          fileInf = fileInfo v
-          fileTypeMem = case fileType fileInf of
+    where 
+        blocksMem = concat $ blocks v
+        fileInf = fileInfo v
+        fileTypeMem = case fileType fileInf of
             Data -> 0x33 
             Game -> 0xCC 
-          protectedMem = case copyProtected fileInf of
+        protectedMem = case copyProtected fileInf of
             False -> 0x00 
             True  -> 0xFF 
-          startBlocks = splitW16Le $ startingBlock fileInf  
-          fileNameMem = map (fromIntegral . fromEnum) $ take 11 (fileName fileInf) 
-          blockSizeMem = splitW16Le $ sizeInBlocks fileInf
-          headerOffset = splitW16Le $ offsetInBlocks fileInf   
+        startBlocks = splitW16Le $ startingBlock fileInf  
+        timeStampMem = exportTimestamp $ timestamp fileInf
+        fileNameMem = map (fromIntegral . fromEnum) $ take 11 (fileName fileInf) 
+        blockSizeMem = splitW16Le $ sizeInBlocks fileInf
+        headerOffset = splitW16Le $ offsetInBlocks fileInf   
+
+
+exportTimestamp :: Timestamp -> [Word8]
+exportTimestamp ts = ct ++ yr ++ mnth ++ dy ++ hr ++ min ++ sec ++ dow
+    where 
+        ct   = [century ts]
+        yr   = [year ts]
+        mnth = [month ts]
+        dy   = [day ts]
+        hr   = [hour ts]
+        min  = [minute ts]
+        sec  = [second ts]
+        dow  = [dayOfWeek ts]
 
 -- Split a Word 16 into two Word 8s,
 -- the first one being the lower byte and the second

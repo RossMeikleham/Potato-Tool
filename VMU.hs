@@ -1,15 +1,25 @@
 module VMU 
 ( VMU(files) 
 , DirectoryEntry 
-    (fileType
-    ,copyProtected
-    ,startingBlock
-    ,fileName
-    ,sizeInBlocks
-    ,offsetInBlocks
+    ( fileType
+    , copyProtected
+    , startingBlock
+    , fileName
+    , timestamp
+    , sizeInBlocks
+    , offsetInBlocks
     )
 , FileType (Game, Data)
-, Timestamp
+, Timestamp 
+    ( century
+    , year
+    , month
+    , day
+    , hour
+    , minute
+    , second
+    , dayOfWeek
+    )
 , rawDumpFile 
 , getBlocks
 , getFreeBlocks
