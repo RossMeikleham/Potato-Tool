@@ -36,7 +36,6 @@ import Data.List.Split
 import qualified Data.ByteString.Lazy as BS
 import Data.Bits
 import Control.Applicative
-import Text.Printf
 
 data VMU = VMU
     { root :: RootBlock
@@ -109,6 +108,21 @@ getEntry fileNo vmu
     | fileNo >= (length . files) vmu = Nothing
     | otherwise = Just $ (files vmu) !! fileNo
 
+-- Obtain the first N free blocks, starting from the highest
+-- block, returns a list of free blocks the size requested if
+-- available, otherwise returns an error message
+getNFreeBlocks :: Int -> VMU -> Either String [Word16]
+getNFreeBlocks n vmu 
+    | length unallocBlockNos < n = Left 
+            ((show n) ++ "free blocks required, there are only " ++
+             (show $ length unallocBlockNos) ++ "free blocks available")
+    | otherwise = Right $ take n unallocBlockNos
+    where 
+        unallocBlockNos = filter (== 0xFFFC) $ reverse $ take highestBlock fatMem
+        fatMem = fat vmu
+        highestBlock = fromIntegral $ userBlocksCount $ root vmu
+
+
 -- Obtain block numbers for given file
 getBlocks :: Int -> VMU -> Maybe [Word16]
 getBlocks fileNo vmu 
@@ -136,7 +150,7 @@ getFreeBlocks :: VMU -> Word16
 getFreeBlocks vmu = 
     fromIntegral $ length $ filter (== 0xFFFC) $ take blockCount fatMem
     where 
-        blockCount = (fromIntegral . userBlocksCount . root) vmu
+        blockCount = fromIntegral $ userBlocksCount $ root vmu
         fatMem = fat vmu
 
 -- Obtain a raw dump for a given file in the filesystem
