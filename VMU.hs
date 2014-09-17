@@ -9,6 +9,7 @@ module VMU
     ,offsetInBlocks
     )
 , FileType (Game, Data)
+, Timestamp
 , rawDumpFile 
 , getBlocks
 , getFreeBlocks
@@ -28,14 +29,14 @@ import Control.Applicative
 import Text.Printf
 
 data VMU = VMU
- { root :: RootBlock
- , files :: [DirectoryEntry]
- , fat :: [Word16]
- , userBlocks   :: [[Word8]]   
- }
+    { root :: RootBlock
+    , files :: [DirectoryEntry]
+    , fat :: [Word16]
+    , userBlocks   :: [[Word8]]   
+    }
 
 
-{-data Timestamp = 
+data Timestamp = Timestamp
     { century :: Word8
     , year :: Word8
     , month :: Word8
@@ -44,8 +45,8 @@ data VMU = VMU
     , minute :: Word8
     , second :: Word8
     , dayOfWeek :: Word8
-    }
--} 
+    } deriving Show
+ 
 
 data RootBlock = RootBlock
     { customVMSColor :: Word8 -- Bool
@@ -53,13 +54,13 @@ data RootBlock = RootBlock
     , redVMS :: Word8
     , greenVMS :: Word8
     , alphaComponent :: Word8
-  --  , timeStamp
-    ,locationFAT :: Word16
-    ,sizeFAT :: Word16
-    ,locationDirectory :: Word16
-    ,sizeDirectory :: Word16
-    ,iconShape :: Word16
-    ,userBlocksCount :: Word16
+    , timeStamp :: Timestamp
+    , locationFAT :: Word16
+    , sizeFAT :: Word16
+    , locationDirectory :: Word16
+    , sizeDirectory :: Word16
+    , iconShape :: Word16
+    , userBlocksCount :: Word16
     } deriving Show
 
 
@@ -68,7 +69,7 @@ data DirectoryEntry = DirectoryEntry
     , copyProtected :: Bool
     , startingBlock :: Word16
     , fileName :: String
- --   , timestamp :: Timestamp
+    , timestamp :: Timestamp
     , sizeInBlocks :: Word16
     , offsetInBlocks :: Word16
     } deriving Show
@@ -141,7 +142,7 @@ rawDumpFile fileNo vmu = do
 -- information on the file system to operate on it
 createRootBlock :: [Word8] -> RootBlock
 createRootBlock fileStr = 
-        RootBlock customColor blue red green alpha 
+        RootBlock customColor blue red green alpha timeS
                   locationFAT sizeFAT locationDir 
                   sizeDir iconShape userBlocksCount
         
@@ -152,6 +153,7 @@ createRootBlock fileStr =
               green = rootBlockStr !! 0x12
               red = rootBlockStr !! 0x13
               alpha = rootBlockStr !! 0x14
+              timeS = createTimestamp $ drop 0x29 rootBlockStr
               locationFAT = encodeWord16 $ slice 0x46 0x47 rootBlockStr
               sizeFAT = encodeWord16 $ slice 0x48 0x49 rootBlockStr
               locationDir = encodeWord16 $ slice 0x4A 0x4B rootBlockStr
@@ -160,6 +162,21 @@ createRootBlock fileStr =
               userBlocksCount = encodeWord16 $ slice 0x50 0x51 rootBlockStr
 
 
+-- Obtain Timestamp
+createTimestamp :: [Word8] -> Timestamp
+createTimestamp mem =
+    Timestamp cen yr mnth day hr min sec dow
+    
+    where 
+        cen  = mem !! 0
+        yr   = mem !! 1  
+        mnth = mem !! 2
+        day  = mem !! 3
+        hr   = mem !! 4
+        min  = mem !! 5
+        sec  = mem !! 6
+        dow  = mem !! 7  
+
 -- Read 32 Bytes entry into a Directory Entry
 -- If file type is none or unrecognized value is read in
 -- then Nothing is returned as it is not a valid directory entry
@@ -167,7 +184,7 @@ createRootBlock fileStr =
 getDirEntry :: [Word8] -> Either String DirectoryEntry
 getDirEntry entry = 
     DirectoryEntry <$> fType <*> protected <*> startingB <*> 
-        name <*> sizeB <*> offsetB 
+        name <*> timeS <*> sizeB <*> offsetB 
 
     where 
         fType = case entry !! 0x0 of
@@ -183,6 +200,7 @@ getDirEntry entry =
 
         startingB = Right $ encodeWord16 $ slice 0x2 0x3 entry
         name = Right $ map (chr . fromEnum) $ slice 0x4 0xF entry
+        timeS = Right $ createTimestamp $ drop 0x9 entry
         sizeB = Right $ encodeWord16 $ slice 0x18 0x19 entry
         offsetB = Right $ encodeWord16 $ slice 0x1A 0x1B entry
 
