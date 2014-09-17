@@ -5,6 +5,8 @@ module RawVMUFile where
 
 import VMU
 import Data.Word
+import Data.Binary
+import Data.Bits
 import Data.List.Split
 
 data RawVMUFile = RawVMUFile 
@@ -33,5 +35,25 @@ checkSize mem entry =
 
 exportVMUFileToRaw :: RawVMUFile -> [Word8]
 exportVMUFileToRaw v = 
+    [fileTypeMem] ++  [protectedMem] ++ startBlocks ++ fileNameMem ++
+    blockSizeMem ++ headerOffset ++ blocksMem
+                    
     where blocksMem = concat $ blocks v
-          fileInfoMem = 
+          fileInf = fileInfo v
+          fileTypeMem = case fileType fileInf of
+            Data -> 0x33 
+            Game -> 0xCC 
+          protectedMem = case copyProtected fileInf of
+            False -> 0x00 
+            True  -> 0xFF 
+          startBlocks = splitW16Le $ startingBlock fileInf  
+          fileNameMem = map (fromIntegral . fromEnum) $ take 11 (fileName fileInf) 
+          blockSizeMem = splitW16Le $ sizeInBlocks fileInf
+          headerOffset = splitW16Le $ offsetInBlocks fileInf   
+
+-- Split a Word 16 into two Word 8s,
+-- the first one being the lower byte and the second
+-- entry being the higher byte
+splitW16Le :: Word16 -> [Word8] 
+splitW16Le num = [n `shiftR` 8] ++ [n .&. 0xFF]
+    where n = fromIntegral num

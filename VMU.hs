@@ -1,6 +1,14 @@
 module VMU 
 ( VMU(files) 
-, DirectoryEntry(fileType,copyProtected,startingBlock,fileName,sizeInBlocks)
+, DirectoryEntry 
+    (fileType
+    ,copyProtected
+    ,startingBlock
+    ,fileName
+    ,sizeInBlocks
+    ,offsetInBlocks
+    )
+, FileType (Game, Data)
 , rawDumpFile 
 , getBlocks
 , getFreeBlocks
