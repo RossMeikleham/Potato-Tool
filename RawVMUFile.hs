@@ -32,6 +32,7 @@ importRawVMUFile mem
         " full blocks")
     | otherwise = either (Left) (checkSize mem) $ getDirEntry mem
 
+
 checkSize :: [Word8] -> DirectoryEntry -> Either String RawVMUFile
 checkSize mem entry = 
     if specifiedBlocks == actualBlocks
@@ -42,6 +43,7 @@ checkSize mem entry =
 
     where actualBlocks = ((length mem) - 32) `div` 512
           specifiedBlocks = fromIntegral $ sizeInBlocks entry  
+
 
 exportVMUFileToRaw :: RawVMUFile -> [Word8]
 exportVMUFileToRaw v = 

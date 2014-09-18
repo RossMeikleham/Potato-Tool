@@ -3,6 +3,7 @@ import System.IO
 import System.Environment
 import GHC.IO.Handle.FD
 import qualified Data.ByteString.Lazy as BS
+import Data.Maybe
 import Text.Printf
 
 
@@ -10,7 +11,7 @@ import Text.Printf
 listFiles :: VMU -> String
 listFiles vmu = 
     (printf titleFormat "" "Name" "Type" "Size" "StartBlock" "CopyProtected") ++
-    (listFiles' (files vmu) 0 fileFormat)
+    (listFiles' (catMaybes $ files vmu) 0 fileFormat)
 
     where titleFormat = "%5s  %-10s  %-4s  %-4s  %-10s  %-13s\n" 
           fileFormat  = "%2d:  %-11s  %-4s  %-4s  %-10s  %-13s\n"
