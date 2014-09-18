@@ -1,27 +1,11 @@
 module VMU 
-( VMU(root, files, fat, userBlocks) 
-, DirectoryEntry 
-    ( fileType
-    , copyProtected
-    , startingBlock
-    , fileName
-    , timestamp
-    , sizeInBlocks
-    , offsetInBlocks
-    )
+( VMU (..) 
+, DirectoryEntry (..) 
 , FileType (Game, Data)
-, Timestamp 
-    ( century
-    , year
-    , month
-    , day
-    , hour
-    , minute
-    , second
-    , dayOfWeek
-    )
+, Timestamp (..)
 , rawDumpFile 
 , getBlocks
+, insertBlocks
 , insertDirEntry
 , getFreeBlocks
 , getNFreeBlocks
@@ -88,6 +72,8 @@ data DirectoryEntry = DirectoryEntry
 data FileType = Game | Data deriving Show
 
 vmuSize = 128 * 1024 --128KB vmu
+
+int x = fromIntegral x :: Int
 
 slice :: Int -> Int -> [Word8] -> [Word8] 
 slice a b xs = take (b - a + 1) (drop a xs)
@@ -158,7 +144,7 @@ insertBlocks blockNos newBlocks curBlocks =
 -- Insert a single block into the given position of total blocks
 insertBlock :: Int -> [Word8] -> [[Word8]] -> [[Word8]]
 insertBlock blockNo newBlock oldBlocks =
-    (take (blockNo - 1) oldBlocks) ++ [newBlock] ++ (drop blockNo oldBlocks) 
+    (take (blockNo) oldBlocks) ++ [newBlock] ++ (drop (blockNo - 1) oldBlocks) 
 
 -- Attempt to insert a directory entry into
 -- the VMU directory in the first empty spot,
@@ -171,6 +157,15 @@ insertDirEntry dir entry
     | otherwise = Right $ xs ++ [Just entry] ++ (tail ys) 
     where xs = takeWhile (isJust) dir
           ys = dropWhile (isJust) dir
+
+
+-- Update the FAT for new blocks for a file
+insertFAT :: [Word16] -> [Word16] -> [Word16]
+insertFAT (x:[]) fat = insertValFAT x 0xFFFA fat
+insertFAT (x:y:xs) fat = insertFAT (y:xs) $ insertValFAT x y fat
+
+insertValFAT :: Word16 -> Word16 -> [Word16] -> [Word16]
+insertValFAT x y fat = (take (int x) fat) ++ [y] ++ (drop ((int x) - 1) fat)
 
 
 -- Obtain the number of free block available on the VMU
