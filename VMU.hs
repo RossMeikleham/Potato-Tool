@@ -6,6 +6,7 @@ module VMU
 , rawDumpFile 
 , getBlocks
 , insertBlocks
+, insertFAT
 , insertDirEntry
 , getFreeBlocks
 , getNFreeBlocks

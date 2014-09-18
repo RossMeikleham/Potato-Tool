@@ -14,6 +14,16 @@ data RawVMUFile = RawVMUFile
     , blocks :: [[Word8]]
     }
 
+injectVMUFile :: [Word8] -> VMU -> Either String VMU
+injectVMUFile mem vmu = do 
+    file <- importRawVMUFile mem  
+    blockNos <- getNFreeBlocks (fromIntegral $ sizeInBlocks $ fileInfo file) vmu
+    newFiles <- insertDirEntry (files vmu) (fileInfo file)
+    let newUserBlocks = insertBlocks blockNos (blocks file) (userBlocks vmu)
+    let newFAT = insertFAT blockNos (fat vmu)
+    return $ VMU (root vmu) newFiles newFAT newUserBlocks
+
+
 importRawVMUFile :: [Word8] -> Either String RawVMUFile
 importRawVMUFile mem 
     | length mem < 32 = Left ("File is too small" ++ 
