@@ -23,6 +23,7 @@ module VMU
 , rawDumpFile 
 , getBlocks
 , getFreeBlocks
+, getNFreeBlocks
 , createVMU
 , getDirEntry
 ) where 
@@ -39,7 +40,7 @@ import Control.Applicative
 
 data VMU = VMU
     { root :: RootBlock
-    , files :: [DirectoryEntry]
+    , files :: [Maybe DirectoryEntry]
     , fat :: [Word16]
     , userBlocks   :: [[Word8]]   
     }
@@ -106,7 +107,7 @@ encodeWord16 (a:b:xs) = a' .|. (b' `shiftL` 8)
 getEntry :: Int -> VMU -> Maybe DirectoryEntry
 getEntry fileNo vmu  
     | fileNo >= (length . files) vmu = Nothing
-    | otherwise = Just $ (files vmu) !! fileNo
+    | otherwise = Just $ (catMaybes $ files vmu) !! fileNo
 
 -- Obtain the first N free blocks, starting from the highest
 -- block, returns a list of free blocks the size requested if
@@ -127,7 +128,7 @@ getNFreeBlocks n vmu
 getBlocks :: Int -> VMU -> Maybe [Word16]
 getBlocks fileNo vmu 
     | fileNo >= (length . files) vmu = Nothing 
-    | otherwise = Just $ getBlocks' ((files vmu) !! fileNo) (fat vmu)
+    | otherwise = Just $ getBlocks' ((catMaybes $ files vmu) !! fileNo) (fat vmu)
 
 getBlocks' :: DirectoryEntry -> [Word16] -> [Word16]
 getBlocks' file fatMem = getBlocks'' (startingBlock file) fatMem
@@ -144,6 +145,19 @@ getBlocks'' blockNo fatMem
         "contains an invalid value " ++ (show nextBlock))
 
         where nextBlock = fatMem !! fromIntegral blockNo
+
+-- Attempt to insert a directory entry into
+-- the VMU directory in the first empty spot,
+-- returns modified directory if successful
+insertDirEntry :: [Maybe DirectoryEntry] ->
+                  DirectoryEntry ->
+                  Either String [Maybe DirectoryEntry]
+insertDirEntry dir entry
+    | null ys  = Left "No directory space left for new entry"
+    | otherwise = Right $ xs ++ [Just entry] ++ (tail ys) 
+    where xs = takeWhile (isJust) dir
+          ys = dropWhile (isJust) dir
+
 
 -- Obtain the number of free block available on the VMU
 getFreeBlocks :: VMU -> Word16
@@ -229,8 +243,8 @@ getDirEntry entry =
         offsetB = Right $ encodeWord16 $ slice 0x1A 0x1B entry
 
 
-createDirectory :: RootBlock -> [Word8] -> [DirectoryEntry]
-createDirectory rb vmu = rights entries
+createDirectory :: RootBlock -> [Word8] -> [Maybe DirectoryEntry]
+createDirectory rb vmu = map (either (\_  -> Nothing) Just) entries
     where dirBlockStart = fromIntegral $ locationDirectory rb
           noBlocks = fromIntegral $ sizeDirectory rb
           dirSizeBytes =  blockStart $ fromIntegral noBlocks
