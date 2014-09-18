@@ -1,5 +1,5 @@
 module VMU 
-( VMU(files) 
+( VMU(root, files, fat, userBlocks) 
 , DirectoryEntry 
     ( fileType
     , copyProtected
@@ -22,6 +22,7 @@ module VMU
     )
 , rawDumpFile 
 , getBlocks
+, insertDirEntry
 , getFreeBlocks
 , getNFreeBlocks
 , createVMU
@@ -145,6 +146,19 @@ getBlocks'' blockNo fatMem
         "contains an invalid value " ++ (show nextBlock))
 
         where nextBlock = fatMem !! fromIntegral blockNo
+
+--Insert multiple blocks with their given position into the
+--user blocks
+insertBlocks :: [Word16] -> [[Word8]] -> [[Word8]] -> [[Word8]]
+insertBlocks blockNos newBlocks curBlocks = 
+    foldl (\c (x,y) -> insertBlock x y c) curBlocks $ zip bNos newBlocks
+    where
+        bNos = map fromIntegral blockNos
+
+-- Insert a single block into the given position of total blocks
+insertBlock :: Int -> [Word8] -> [[Word8]] -> [[Word8]]
+insertBlock blockNo newBlock oldBlocks =
+    (take (blockNo - 1) oldBlocks) ++ [newBlock] ++ (drop blockNo oldBlocks) 
 
 -- Attempt to insert a directory entry into
 -- the VMU directory in the first empty spot,
