@@ -9,14 +9,32 @@ import Data.Binary
 import Data.Bits
 import Data.List.Split
 
-data RawVMUFile = RawVMUFile 
+data VMUFile = VMUFile 
     { fileInfo :: DirectoryEntry
     , blocks :: [[Word8]]
     }
 
-injectVMUFile :: [Word8] -> VMU -> Either String VMU
-injectVMUFile mem vmu = do 
-    file <- importRawVMUFile mem  
+
+-- DCI file format has bytes for each block reversed in groups of 4,
+-- we need to reverse these bytes when importing and exporting
+-- to read/write correctly to an ordinary Dreamcast VMU
+reverseDCIBytes :: [Word8] -> [Word8]
+reverseDCIBytes xs = concatMap (reverse) $ chunksOf 4 xs
+
+injectDCIFile :: [Word8] -> VMU -> Either String VMU
+injectDCIFile mem vmu = do
+    file <- importRawVMUFile mem
+    let dciFile = VMUFile (fileInfo file) (map reverseDCIBytes $ blocks file)
+    injectVMUFile dciFile vmu
+    
+
+injectRawFile :: [Word8] -> VMU -> Either String VMU
+injectRawFile mem vmu = do
+    file <- importRawVMUFile mem
+    injectVMUFile file vmu
+
+injectVMUFile :: VMUFile -> VMU -> Either String VMU
+injectVMUFile file vmu = do 
     blockNos <- getNFreeBlocks (fromIntegral $ sizeInBlocks $ fileInfo file) vmu
     newFiles <- insertDirEntry (files vmu) (fileInfo file)
     let newUserBlocks = insertBlocks blockNos (blocks file) (userBlocks vmu)
@@ -24,7 +42,7 @@ injectVMUFile mem vmu = do
     return $ VMU (root vmu) newFiles newFAT newUserBlocks
 
 
-importRawVMUFile :: [Word8] -> Either String RawVMUFile
+importRawVMUFile :: [Word8] -> Either String VMUFile
 importRawVMUFile mem 
     | length mem < 32 = Left ("File is too small" ++ 
         (show $ length mem) ++ "bytes")
@@ -33,10 +51,10 @@ importRawVMUFile mem
     | otherwise = either (Left) (checkSize mem) $ getDirEntry mem
 
 
-checkSize :: [Word8] -> DirectoryEntry -> Either String RawVMUFile
+checkSize :: [Word8] -> DirectoryEntry -> Either String VMUFile
 checkSize mem entry = 
     if specifiedBlocks == actualBlocks
-        then Right $ RawVMUFile entry $ chunksOf 512 $ drop 32 mem
+        then Right $ VMUFile entry $ chunksOf 512 $ drop 32 mem
         else Left ("File directory info specifies it contains " ++ 
             (show specifiedBlocks) ++ "blocks however it actually contains" ++ 
             (show actualBlocks) ++ "blocks")
@@ -45,8 +63,8 @@ checkSize mem entry =
           specifiedBlocks = fromIntegral $ sizeInBlocks entry  
 
 
-exportVMUFileToRaw :: RawVMUFile -> [Word8]
-exportVMUFileToRaw v = 
+exportVMUFile :: VMUFile -> [Word8]
+exportVMUFile v = 
     [fileTypeMem] ++  [protectedMem] ++ startBlocks ++ fileNameMem ++
     timeStampMem ++ blockSizeMem ++ headerOffset ++ blocksMem
                     
