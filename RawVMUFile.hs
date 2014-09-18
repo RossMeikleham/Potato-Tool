@@ -31,7 +31,7 @@ injectDCIFile mem vmu = do
 injectRawFile :: [Word8] -> VMU -> Either String VMU
 injectRawFile mem vmu = do
     file <- importRawVMUFile mem
-    injectVMUFile file vmu
+    injectVMUFile file vmuj
 
 injectVMUFile :: VMUFile -> VMU -> Either String VMU
 injectVMUFile file vmu = do 

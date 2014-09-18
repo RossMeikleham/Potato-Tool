@@ -30,17 +30,29 @@ listFiles' (x:xs) no format =
           fCopy =  if copyProtected x then "Yes" else "No"
 
 
+
+
+listFilesCommand :: [String] -> IO ()
+listFilesCommand args 
+    | length args < 2 = putStrLn "Expecting vmu file"
+    | otherwise = do
+        bs <- BS.readFile $ args !! 1 
+        case createVMU bs of
+            Left str -> error str
+            Right vmu -> putStrLn $ listFiles vmu
+
+executeCommand :: String -> [String] -> IO() 
+executeCommand command args = case args !! 0 of
+    "ls" -> listFilesCommand args
+    _ -> error $ "unknown command " ++ command
+
 main :: IO()
 main = do 
         args <- getArgs
         progName <- getProgName
-
-        let vmuFile = head args
+        
+        let command = head args
              
         if length args <= 0 
             then putStrLn ("Usage " ++ progName ++ " [vmu file]")
-            else do 
-                    bs <- BS.readFile vmuFile 
-                    case createVMU  bs of
-                        Left str -> error str
-                        Right vmu -> putStrLn $ listFiles vmu
+            else executeCommand command args
