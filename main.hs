@@ -1,4 +1,5 @@
 import VMU
+import RawVMUFile
 import System.IO
 import System.Environment
 import GHC.IO.Handle.FD
@@ -41,9 +42,27 @@ listFilesCommand args
             Left str -> error str
             Right vmu -> putStrLn $ listFiles vmu
 
+
+injectDCI :: BS.ByteString -> BS.ByteString -> Either String VMU
+injectDCI vmu file = do
+    vmu <- createVMU vmu 
+    injectDCIFile (BS.unpack file) vmu
+
+
+injectDCICommand :: [String] -> IO()
+injectDCICommand args
+    | length args < 3 = putStrLn "Expecting vmu and dci file"
+    | otherwise = do
+        vmuBs <- BS.readFile $ args !! 1
+        fileBs <- BS.readFile $ args !! 2
+        case injectDCI vmuBs fileBs of
+            Left  x -> putStrLn x
+            Right y -> putStrLn $ listFiles y
+
 executeCommand :: String -> [String] -> IO() 
 executeCommand command args = case args !! 0 of
     "ls" -> listFilesCommand args
+    "injectDCI" -> injectDCICommand args 
     _ -> error $ "unknown command " ++ command
 
 main :: IO()

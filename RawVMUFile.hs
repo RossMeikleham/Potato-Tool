@@ -1,7 +1,13 @@
 -- Module for reading/extracting individual
 -- Raw VMU files from the VMU
 
-module RawVMUFile where
+module RawVMUFile 
+( VMUFile (..) 
+, injectDCIFile
+, injectRawFile
+, exportVMUFile
+)
+where
 
 import VMU
 import Data.Word
@@ -31,7 +37,7 @@ injectDCIFile mem vmu = do
 injectRawFile :: [Word8] -> VMU -> Either String VMU
 injectRawFile mem vmu = do
     file <- importRawVMUFile mem
-    injectVMUFile file vmuj
+    injectVMUFile file vmu
 
 injectVMUFile :: VMUFile -> VMU -> Either String VMU
 injectVMUFile file vmu = do 
