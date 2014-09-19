@@ -45,7 +45,7 @@ data Timestamp = Timestamp
  
 
 data RootBlock = RootBlock
-    { customVMSColor :: Word8 -- Bool
+    { customVMSColor :: Bool
     , blueVMS :: Word8
     , redVMS :: Word8
     , greenVMS :: Word8
@@ -57,6 +57,8 @@ data RootBlock = RootBlock
     , sizeDirectory :: Word16
     , iconShape :: Word16
     , userBlocksCount :: Word16
+    , unknownValues1 :: [Word8] -- 0x40 - 0x45
+    , unknownValues2 :: [Word8] -- 0x52 - 0xFF
     } deriving Show
 
 
@@ -89,6 +91,14 @@ encodeWord16 :: [Word8] -> Word16
 encodeWord16 (a:b:xs) = a' .|. (b' `shiftL` 8)
     where a' = fromIntegral a
           b' = fromIntegral b
+
+-- Split a Word 16 into two Word 8s,
+-- the first one being the lower byte and the second
+-- entry being the higher byte
+splitW16Le :: Word16 -> [Word8] 
+splitW16Le num = [n `shiftR` 8] ++ [n .&. 0xFF]
+    where n = fromIntegral num
+
 
 -- Obtain file information in the directory
 -- from given file no
@@ -197,10 +207,11 @@ createRootBlock fileStr =
         RootBlock customColor blue red green alpha timeS
                   locationFAT sizeFAT locationDir 
                   sizeDir iconShape userBlocksCount
+                  unknown1 unknown2
         
         where 
               rootBlockStr = drop (blockStart 255) fileStr
-              customColor = rootBlockStr !! 0x10 -- /= 0x0
+              customColor = rootBlockStr !! 0x10 /= 0x0
               blue = rootBlockStr !! 0x11
               green = rootBlockStr !! 0x12
               red = rootBlockStr !! 0x13
@@ -212,6 +223,8 @@ createRootBlock fileStr =
               sizeDir = encodeWord16 $ slice 0x4C 0x4D rootBlockStr
               iconShape = encodeWord16 $ slice 0x4E 0x4F rootBlockStr
               userBlocksCount = encodeWord16 $ slice 0x50 0x51 rootBlockStr
+              unknown1 = slice 0x40 0x45 rootBlockStr
+              unknown2 = slice 0x52 0xFF rootBlockStr
 
 
 -- Obtain Timestamp
@@ -294,3 +307,70 @@ createVMU bs
               dirs = createDirectory rb mem
               fat = createFAT rb mem 
               blocks = createUserBlocks rb mem
+
+exportVMU :: VMU -> [Word8]
+exportVMU vmu = ub ++ dirs ++ ft
+    where 
+          ub = concat (userBlocks vmu)
+          ft = concatMap (splitW16Le) (fat vmu)
+          dirs = concatMap (exportDirEntry) (files vmu)
+
+exportDirEntry :: Maybe DirectoryEntry -> [Word8]
+exportDirEntry dir = case dir of
+    Nothing -> take 32 [0,0..]
+    Just d ->  [fileTypeMem] ++  [protectedMem] ++ startBlocks ++ 
+                fileNameMem ++ timeStampMem ++ blockSizeMem ++ headerOffset 
+                    
+        where 
+            fileTypeMem = case fileType d of
+                Data -> 0x33 
+                Game -> 0xCC 
+            protectedMem = case copyProtected d of
+                False -> 0x00 
+                True  -> 0xFF 
+            startBlocks = splitW16Le $ startingBlock d 
+            timeStampMem = exportTimestamp $ timestamp d
+            fileNameMem = map (fromIntegral . fromEnum) $ take 11 (fileName d) 
+            blockSizeMem = splitW16Le $ sizeInBlocks d
+            headerOffset = splitW16Le $ offsetInBlocks d
+
+
+exportRootBlock :: RootBlock -> [Word8]
+exportRootBlock rb = start ++ custom ++ blue ++ green ++
+    red ++ alpha ++ padding ++ ts ++ padding2 ++ unknown1 ++
+    fatLoc ++ fatSize ++ dirLoc ++ dirSize ++ is ++ ubc ++ unknown2
+
+    where
+        start = take 0x10 [0x55,0x55..]
+        custom = case customVMSColor rb of
+            True -> [0x1]
+            False -> [0x0]
+        blue = [blueVMS rb]
+        green = [greenVMS rb]
+        red = [greenVMS rb]
+        alpha = [alphaComponent rb]
+        padding = take (0x1B) [0x0,0x0..]
+        ts = exportTimestamp $ timeStamp rb
+        padding2 = take (0x8) [0x0,0x0..]
+        unknown1 = unknownValues1 rb
+        fatLoc = splitW16Le $ locationFAT rb
+        fatSize = splitW16Le $ sizeFAT rb
+        dirLoc = splitW16Le $ locationDirectory rb
+        dirSize = splitW16Le $ sizeDirectory rb    
+        is = splitW16Le $ iconShape rb
+        ubc = splitW16Le $ userBlocksCount rb
+        unknown2 =unknownValues2 rb
+
+exportTimestamp :: Timestamp -> [Word8]
+exportTimestamp ts = ct ++ yr ++ mnth ++ dy ++ hr ++ min ++ sec ++ dow
+    where 
+        ct   = [century ts]
+        yr   = [year ts]
+        mnth = [month ts]
+        dy   = [day ts]
+        hr   = [hour ts]
+        min  = [minute ts]
+        sec  = [second ts]
+        dow  = [dayOfWeek ts]
+
+
