@@ -1,7 +1,7 @@
 -- Module for reading/extracting individual
 -- Raw VMU files from the VMU
 
-module RawVMUFile 
+module VMUFile 
 ( VMUFile (..) 
 , injectDCIFile
 , injectRawFile
@@ -79,40 +79,4 @@ checkSize mem entry =
 
 exportVMUFile :: VMUFile -> [Word8]
 exportVMUFile v = 
-    [fileTypeMem] ++  [protectedMem] ++ startBlocks ++ fileNameMem ++
-    timeStampMem ++ blockSizeMem ++ headerOffset ++ blocksMem
-                    
-    where 
-        blocksMem = concat $ blocks v
-        fileInf = fileInfo v
-        fileTypeMem = case fileType fileInf of
-            Data -> 0x33 
-            Game -> 0xCC 
-        protectedMem = case copyProtected fileInf of
-            False -> 0x00 
-            True  -> 0xFF 
-        startBlocks = splitW16Le $ startingBlock fileInf  
-        timeStampMem = exportTimestamp $ timestamp fileInf
-        fileNameMem = map (fromIntegral . fromEnum) $ take 11 (fileName fileInf) 
-        blockSizeMem = splitW16Le $ sizeInBlocks fileInf
-        headerOffset = splitW16Le $ offsetInBlocks fileInf   
-
-
-exportTimestamp :: Timestamp -> [Word8]
-exportTimestamp ts = ct ++ yr ++ mnth ++ dy ++ hr ++ min ++ sec ++ dow
-    where 
-        ct   = [century ts]
-        yr   = [year ts]
-        mnth = [month ts]
-        dy   = [day ts]
-        hr   = [hour ts]
-        min  = [minute ts]
-        sec  = [second ts]
-        dow  = [dayOfWeek ts]
-
--- Split a Word 16 into two Word 8s,
--- the first one being the lower byte and the second
--- entry being the higher byte
-splitW16Le :: Word16 -> [Word8] 
-splitW16Le num = [n `shiftR` 8] ++ [n .&. 0xFF]
-    where n = fromIntegral num
+    (exportDirEntry . Just . fileInfo) v ++ (concat . blocks) v

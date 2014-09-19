@@ -12,6 +12,8 @@ module VMU
 , getNFreeBlocks
 , createVMU
 , getDirEntry
+, exportVMU
+, exportDirEntry
 ) where 
 
 import Data.Word
@@ -28,7 +30,8 @@ data VMU = VMU
     { root :: RootBlock
     , files :: [Maybe DirectoryEntry]
     , fat :: [Word16]
-    , userBlocks   :: [[Word8]]   
+    , userBlocks   :: [[Word8]]  
+    , unused :: [Word8] -- blocks 200 - 240 are unused by default
     } deriving Show
 
 
@@ -300,20 +303,26 @@ createVMU bs
     | BS.length bs /= vmuSize = Left ("VMU is incorrect size (" ++ 
         (show $ BS.length bs) ++ " bytes) should be exactly " ++ (show vmuSize) ++ 
         "bytes")
-    | otherwise = Right $ VMU rb dirs fat blocks
+    | otherwise = Right $ VMU rb dirs fat blocks extraBlocks
         where 
               mem = BS.unpack bs
               rb = createRootBlock mem
               dirs = createDirectory rb mem
               fat = createFAT rb mem 
               blocks = createUserBlocks rb mem
+              extraBlocks = take (blockStart $ int leftOverBC) $ 
+                drop (blockStart $ int $  userBlocksCount rb) mem
+              leftOverBC =  241 - userBlocksCount rb 
+
 
 exportVMU :: VMU -> [Word8]
-exportVMU vmu = ub ++ dirs ++ ft
+exportVMU vmu = ub ++ eb ++ dirs ++ ft ++ rb
     where 
           ub = concat (userBlocks vmu)
+          eb = unused vmu
           ft = concatMap (splitW16Le) (fat vmu)
-          dirs = concatMap (exportDirEntry) (files vmu)
+          dirs = reverse $ concatMap (exportDirEntry) (files vmu)
+          rb = exportRootBlock (root vmu)
 
 exportDirEntry :: Maybe DirectoryEntry -> [Word8]
 exportDirEntry dir = case dir of
