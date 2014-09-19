@@ -42,11 +42,19 @@ injectRawFile mem vmu = do
 injectVMUFile :: VMUFile -> VMU -> Either String VMU
 injectVMUFile file vmu = do 
     blockNos <- getNFreeBlocks (fromIntegral $ sizeInBlocks $ fileInfo file) vmu
-    newFiles <- insertDirEntry (files vmu) (fileInfo file)
+    let dirEntry = DirectoryEntry ft cp (head blockNos)  fn ts sib oib
+    newFiles <- insertDirEntry (files vmu) dirEntry
     let newUserBlocks = insertBlocks blockNos (blocks file) (userBlocks vmu)
     let newFAT = insertFAT blockNos (fat vmu)
     return $ VMU (root vmu) newFiles newFAT newUserBlocks
-
+        where oldDirEntry = fileInfo file
+              ft = fileType oldDirEntry
+              cp = copyProtected oldDirEntry
+              fn = fileName oldDirEntry
+              ts = timestamp oldDirEntry
+              sib = sizeInBlocks oldDirEntry
+              oib = offsetInBlocks oldDirEntry  
+              
 
 importRawVMUFile :: [Word8] -> Either String VMUFile
 importRawVMUFile mem 

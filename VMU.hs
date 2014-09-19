@@ -29,7 +29,7 @@ data VMU = VMU
     , files :: [Maybe DirectoryEntry]
     , fat :: [Word16]
     , userBlocks   :: [[Word8]]   
-    }
+    } deriving Show
 
 
 data Timestamp = Timestamp
@@ -105,11 +105,15 @@ getNFreeBlocks n vmu
     | length unallocBlockNos < n = Left 
             ((show n) ++ "free blocks required, there are only " ++
              (show $ length unallocBlockNos) ++ "free blocks available")
-    | otherwise = Right $ take n unallocBlockNos
+    | otherwise = Right $ map (fst) $ take n unallocBlockNos
     where 
-        unallocBlockNos = filter (== 0xFFFC) $ reverse $ take highestBlock fatMem
-        fatMem = fat vmu
+        unallocBlockNos = filter (\(i, x) -> x == 0xFFFC) $ reverse $ take highestBlock fatMem
+        fatMem = toIndicies 0 $ fat vmu
         highestBlock = fromIntegral $ userBlocksCount $ root vmu
+
+toIndicies :: Word16 -> [a] -> [(Word16, a)]
+toIndicies _ [] = []
+toIndicies i (x:xs)  = (i , x) : toIndicies (i + 1) xs
 
 
 -- Obtain block numbers for given file
