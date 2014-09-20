@@ -9,8 +9,8 @@ import Text.Printf
 
 listFiles :: VMU -> String
 listFiles vmu = 
-    (printf titleFormat "" "Name" "Type" "Size" "StartBlock" "CopyProtected") ++
-    (listFiles' (catMaybes $ files vmu) 1 fileFormat)
+    printf titleFormat "" "Name" "Type" "Size" "StartBlock" "CopyProtected" ++
+    listFiles' (catMaybes $ files vmu) 1 fileFormat
 
     where titleFormat = "%5s  %-10s  %-4s  %-4s  %-10s  %-13s\n" 
           fileFormat  = "%2d:  %-11s  %-4s  %-4s  %-10s  %-13s\n"
@@ -18,8 +18,8 @@ listFiles vmu =
 listFiles' :: [DirectoryEntry] -> Int -> String -> String
 listFiles' [] _ _ = ""
 listFiles' (x:xs) no format =
-    (printf format no fName fType fSize fStart fCopy)  ++ 
-        (listFiles' xs (no + 1) format)
+    printf format no fName fType fSize fStart fCopy  ++ 
+        listFiles' xs (no + 1) format
     where 
           fName =  fileName x
           fType =  (show . fileType) x
@@ -94,7 +94,7 @@ extractDCICommand args
         let fileNo = read (args !! 2) :: Int
         case extractDCI fileNo vmuBs of
             Left x -> putStrLn x
-            Right v -> BS.writeFile (args !! 3) $ BS.pack $ exportVMUFile $ v
+            Right v -> BS.writeFile (args !! 3) $ BS.pack $ exportVMUFile v
 
 
 -- Unlock unused blocks 200 - 240 in the filesystem for use
@@ -127,7 +127,7 @@ helpCommand = do
         " extra storage space"
 
 executeCommand :: String -> [String] -> IO() 
-executeCommand command args = case args !! 0 of
+executeCommand command args = case head args of
     "ls" -> listFilesCommand args
     "rm" -> rmCommand args
     "injectDCI" -> injectDCICommand args 

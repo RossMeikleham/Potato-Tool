@@ -104,7 +104,7 @@ encodeWord16 _ = error "Need 2 Word8s"
 -- the first one being the lower byte and the second
 -- entry being the higher byte
 splitW16Le :: Word16 -> [Word8] 
-splitW16Le num = map (fromIntegral) $ [num .&. 0xFF] ++ [num `shiftR` 8]
+splitW16Le num = map fromIntegral $ (num .&. 0xFF) : [num `shiftR` 8]
 
 
 -- Obtain file information in the directory
@@ -112,9 +112,9 @@ splitW16Le num = map (fromIntegral) $ [num .&. 0xFF] ++ [num `shiftR` 8]
 getEntry :: Int -> VMU -> Either String DirectoryEntry
 getEntry fileNo vmu  
     | fileNo > (length . catMaybes . files) vmu = Left $ "file number " ++ 
-        (show fileNo) ++ " doesn't exist, use the \"ls\" command to obtain" ++ 
+        show fileNo ++ " doesn't exist, use the \"ls\" command to obtain" ++ 
         "valid files in the vmu"
-    | otherwise = Right $ (catMaybes $ files vmu) !! (fileNo - 1)
+    | otherwise = Right $ catMaybes (files vmu) !! (fileNo - 1)
 
 
 -- Obtain the first N free blocks, starting from the highest
@@ -123,9 +123,9 @@ getEntry fileNo vmu
 getNFreeBlocks :: Int -> VMU -> Either String [Word16]
 getNFreeBlocks n vmu 
     | length unallocBlockNos < n = Left 
-            ((show n) ++ "free blocks required, there are only " ++
-             (show $ length unallocBlockNos) ++ "free blocks available")
-    | otherwise = Right $ map (fst) $ take n unallocBlockNos
+            (show n ++ "free blocks required, there are only " ++
+             show (length unallocBlockNos) ++ "free blocks available")
+    | otherwise = Right $ map fst $ take n unallocBlockNos
     where 
         unallocBlockNos = filter (\(_, x) -> x == 0xFFFC) $ reverse $ take highestBlock fatMem
         fatMem = toIndicies 0 $ fat vmu
@@ -140,21 +140,21 @@ toIndicies i (x:xs)  = (i , x) : toIndicies (i + 1) xs
 getBlocks :: Int -> VMU -> Maybe [Word16]
 getBlocks fileNo vmu 
     | fileNo >= (length . files) vmu = Nothing 
-    | otherwise = Just $ getBlocks' ((catMaybes $ files vmu) !! fileNo) (fat vmu)
+    | otherwise = Just $ getBlocks' (catMaybes (files vmu) !! fileNo) (fat vmu)
 
 getBlocks' :: DirectoryEntry -> [Word16] -> [Word16]
-getBlocks' file fatMem = getBlocks'' (startingBlock file) fatMem
+getBlocks' file = getBlocks'' (startingBlock file) 
    
 
 getBlocks'' :: Word16 -> [Word16] -> [Word16]
 getBlocks'' blockNo fatMem  
     | nextBlock == 0xFFFA  = [blockNo]
     | nextBlock <= 0xFF    = blockNo : getBlocks'' nextBlock fatMem 
-    | nextBlock == 0xFFFC  = error ("Block " ++ (show blockNo) ++ 
+    | nextBlock == 0xFFFC  = error ("Block " ++ show blockNo ++ 
         "is unallocated")
      
-    | otherwise = error ("FileSystem is corrupt, block" ++ (show blockNo) ++
-        "contains an invalid value " ++ (show nextBlock))
+    | otherwise = error ("FileSystem is corrupt, block" ++ show blockNo ++
+        "contains an invalid value " ++ show nextBlock)
 
         where nextBlock = fatMem !! fromIntegral blockNo
 
@@ -169,7 +169,7 @@ insertBlocks blockNos newBlocks curBlocks =
 -- Insert a single block into the given position of total blocks
 insertBlock :: Int -> [Word8] -> [[Word8]] -> [[Word8]]
 insertBlock blockNo newBlock oldBlocks =
-    (take (blockNo) oldBlocks) ++ [newBlock] ++ (drop (blockNo + 1) oldBlocks) 
+    take blockNo oldBlocks ++ [newBlock] ++ drop (blockNo + 1) oldBlocks
 
 -- Attempt to insert a directory entry into
 -- the VMU directory in the first empty spot,
@@ -179,16 +179,16 @@ insertDirEntry :: [Maybe DirectoryEntry] ->
                   Either String [Maybe DirectoryEntry]
 insertDirEntry dir entry
     | null ys  = Left "No directory space left for new entry"
-    | otherwise = Right $ xs ++ [Just entry] ++ (tail ys) 
-    where xs = takeWhile (isJust) dir
-          ys = dropWhile (isJust) dir
+    | otherwise = Right $ xs ++ [Just entry] ++ tail ys
+    where xs = takeWhile isJust dir
+          ys = dropWhile isJust dir
 
 
 eraseDirEntry :: [Maybe DirectoryEntry] -> 
                  Int ->
                  Either String [Maybe DirectoryEntry]
 eraseDirEntry [] _ = Left "File doesn't exist"
-eraseDirEntry (Just x:xs) 1 = Right (Nothing : xs)
+eraseDirEntry (Just _:xs) 1 = Right (Nothing : xs)
 eraseDirEntry (Just x:xs) n = (++) <$> Right [Just x] <*> eraseDirEntry xs (n - 1)
 eraseDirEntry (Nothing:xs) n = (++) <$> Right [Nothing] <*> eraseDirEntry xs n
 
@@ -202,11 +202,10 @@ insertFAT (x:y:xs) f = insertFAT (y:xs) $ insertValFAT x y f
 
 -- Marks blocks as unallocated in FAT
 removeFAT :: [Word16] -> [Word16] -> [Word16]
-removeFAT [] f = f
-removeFAT (x:xs) f = removeFAT xs $ insertValFAT x 0xFFFC f
+removeFAT xs f = foldl (\ s x -> insertValFAT x 0xFFFC s) f xs
 
 insertValFAT :: Word16 -> Word16 -> [Word16] -> [Word16]
-insertValFAT x y f = (take (int x) f) ++ [y] ++ (drop ((int x) + 1) f)
+insertValFAT x y f = take (int x) f ++ [y] ++ drop (int x + 1) f
 
 
 -- Obtain the number of free block available on the VMU
@@ -272,7 +271,7 @@ createTimestamp mem =
     Timestamp cen yr mnth d hr m sec dow
     
     where 
-        cen  = mem !! 0
+        cen  = head mem 
         yr   = mem !! 1  
         mnth = mem !! 2
         d    = mem !! 3
@@ -295,12 +294,12 @@ getDirEntry entry =
                 0x33 -> Right Data
                 0xCC -> Right Game
                 0x00 -> Left "File marked as empty"
-                _ -> Left ("Unknown type value" ++ (show entry))
+                _ -> Left ("Unknown type value" ++ show entry)
     
         protected = case entry !! 0x1 of
                 0x00 -> Right False
                 0xFF -> Right True
-                _ -> Left ("Unknown protected value" ++ (show entry))
+                _ -> Left ("Unknown protected value" ++ show entry)
 
         startingB = Right $ encodeWord16 $ slice 0x2 0x3 entry
         name = Right $ map (chr . fromEnum) $ slice 0x4 0xF entry
@@ -310,15 +309,15 @@ getDirEntry entry =
 
 
 createDirectory :: RootBlock -> [Word8] -> [Maybe DirectoryEntry]
-createDirectory rb vmu = map (either (\_  -> Nothing) Just) entries
+createDirectory rb vmu = map (either (const Nothing) Just) entries
     where dirBlockStart = fromIntegral $ locationDirectory rb
           noBlocks = fromIntegral $ sizeDirectory rb
           entries = 
-            concatMap (entriesBlock) [dirBlockStart,dirBlockStart-1..dirBlockStart - (noBlocks -1)]
+            concatMap entriesBlock [dirBlockStart,dirBlockStart-1..dirBlockStart - (noBlocks -1)]
 
           -- 16 32 bytes entries in 512 byte block
           entriesBlock n = [getDirEntry $ 
-            slice ((blockStart n) + x * 32) ((blockStart n) - 1 + ((x + 1) * 32)) vmu | 
+            slice (blockStart n + x * 32) (blockStart n - 1 + ((x + 1) * 32)) vmu | 
                 x <- [0..15]] 
 
 createUserBlocks :: RootBlock -> [Word8] -> [[Word8]]
@@ -326,16 +325,16 @@ createUserBlocks rb mem = chunksOf 512 $ take (noBlocks * 512) mem
     where noBlocks = fromIntegral $ userBlocksCount rb 
 
 createFAT :: RootBlock -> [Word8] -> [Word16]
-createFAT rb mem =   map (encodeWord16) $ chunksOf 2 fatMem8
+createFAT rb mem =   map encodeWord16 $ chunksOf 2 fatMem8
     where noBlocks = fromIntegral $ sizeFAT rb
           startFAT = blockStart $ fromIntegral $ locationFAT rb
-          fatMem8 = (take (512 * noBlocks)) $ (drop startFAT) mem   
+          fatMem8 = take (512 * noBlocks) $ drop startFAT mem   
             
 
 createVMU :: BS.ByteString -> Either String VMU
 createVMU bs 
     | (int . BS.length) bs /= vmuSize = Left ("VMU is incorrect size (" ++ 
-        (show $ BS.length bs) ++ " bytes) should be exactly " ++ (show vmuSize) ++ 
+        show (BS.length bs) ++ " bytes) should be exactly " ++ show vmuSize ++ 
         "bytes")
     | otherwise = Right $ VMU rb dirs f blocks extraBlocks
         where 
@@ -354,8 +353,8 @@ exportVMU vmu = ub ++ eb ++ dirs ++ ft ++ rb
     where 
           ub = concat (userBlocks vmu)
           eb = unused vmu
-          ft = concatMap (splitW16Le) (fat vmu)
-          dirs = concat $ reverse $ chunksOf 512 $ concatMap (exportDirEntry) (files vmu)
+          ft = concatMap splitW16Le (fat vmu)
+          dirs = concat $ reverse $ chunksOf 512 $ concatMap exportDirEntry (files vmu)
           rb = exportRootBlock (root vmu)
 
 exportDirEntry :: Maybe DirectoryEntry -> [Word8]
@@ -369,9 +368,7 @@ exportDirEntry dir = case dir of
             fileTypeMem = case fileType d of
                 Data -> 0x33 
                 Game -> 0xCC 
-            protectedMem = case copyProtected d of
-                False -> 0x00 
-                True  -> 0xFF 
+            protectedMem = if copyProtected d then 0xFF else 0x00
             startBlocks = splitW16Le $ startingBlock d 
             timeStampMem = exportTimestamp $ timestamp d
             fileNameMem = map (fromIntegral . fromEnum) $ take 12 (fileName d) 
@@ -387,16 +384,14 @@ exportRootBlock rb = start ++ custom ++ blue ++ green ++
 
     where
         start = take 0x10 [0x55,0x55..]
-        custom = case customVMSColor rb of
-            True -> [0x1]
-            False -> [0x0]
+        custom = if customVMSColor rb then [0x1] else [0x0] 
         blue = [blueVMS rb]
         green = [greenVMS rb]
         red = [greenVMS rb]
         alpha = [alphaComponent rb]
-        padding = take (0x1B) [0x0,0x0..]
+        padding = take 0x1B [0x0,0x0..]
         ts = exportTimestamp $ timeStamp rb
-        padding2 = take (0x8) [0x0,0x0..]
+        padding2 = take 0x8 [0x0,0x0..]
         unknown1 = unknownValues1 rb
         fatLoc = splitW16Le $ locationFAT rb
         fatSize = splitW16Le $ sizeFAT rb
