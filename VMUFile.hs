@@ -12,8 +12,6 @@ where
 
 import VMU
 import Data.Word
-import Data.Binary
-import Data.Bits
 import Data.List.Split
 
 data VMUFile = VMUFile 

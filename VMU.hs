@@ -2,6 +2,7 @@ module VMU
 ( VMU (..) 
 , DirectoryEntry (..) 
 , FileType (Game, Data)
+, RootBlock (..)
 , Timestamp (..)
 , rawDumpFile 
 , getBlocks
@@ -19,10 +20,8 @@ module VMU
 ) where 
 
 import Data.Word
-import Data.Binary
 import Data.Maybe
 import Data.Char
-import Data.Either
 import Data.List.Split
 import qualified Data.ByteString.Lazy as BS
 import Data.Bits
@@ -79,8 +78,10 @@ data DirectoryEntry = DirectoryEntry
 
 data FileType = Game | Data deriving Show
 
+vmuSize :: Int
 vmuSize = 128 * 1024 --128KB vmu
 
+int :: Integral a => a -> Int
 int x = fromIntegral x :: Int
 
 slice :: Int -> Int -> [Word8] -> [Word8] 
@@ -93,9 +94,10 @@ blockStart b = 512 * b
 -- Concatonate two Word8 values into a little
 -- endian Word16
 encodeWord16 :: [Word8] -> Word16
-encodeWord16 (a:b:xs) = a' .|. (b' `shiftL` 8)
+encodeWord16 (a:b:_) = a' .|. (b' `shiftL` 8)
     where a' = fromIntegral a
           b' = fromIntegral b
+encodeWord16 _ = error "Need 2 Word8s"
 
 -- Split a Word 16 into two Word 8s,
 -- the first one being the lower byte and the second
@@ -108,8 +110,9 @@ splitW16Le num = map (fromIntegral) $ [num .&. 0xFF] ++ [num `shiftR` 8]
 -- from given file no
 getEntry :: Int -> VMU -> Either String DirectoryEntry
 getEntry fileNo vmu  
-    | fileNo >= (length . files) vmu = Left $ "file number " ++ (show fileNo) ++ 
-        "doesn't exist, use \"ls\" command to obtain valid files in the vmu"
+    | fileNo >= (length . catMaybes . files) vmu = Left $ "file number " ++ 
+        (show fileNo) ++ " doesn't exist, use the \"ls\" command to obtain" ++ 
+        "valid files in the vmu"
     | otherwise = Right $ (catMaybes $ files vmu) !! (fileNo - 1)
 
 -- Obtain the first N free blocks, starting from the highest
@@ -122,7 +125,7 @@ getNFreeBlocks n vmu
              (show $ length unallocBlockNos) ++ "free blocks available")
     | otherwise = Right $ map (fst) $ take n unallocBlockNos
     where 
-        unallocBlockNos = filter (\(i, x) -> x == 0xFFFC) $ reverse $ take highestBlock fatMem
+        unallocBlockNos = filter (\(_, x) -> x == 0xFFFC) $ reverse $ take highestBlock fatMem
         fatMem = toIndicies 0 $ fat vmu
         highestBlock = fromIntegral $ userBlocksCount $ root vmu
 
@@ -181,11 +184,12 @@ insertDirEntry dir entry
 
 -- Update the FAT for new blocks for a file
 insertFAT :: [Word16] -> [Word16] -> [Word16]
-insertFAT (x:[]) fat = insertValFAT x 0xFFFA fat
-insertFAT (x:y:xs) fat = insertFAT (y:xs) $ insertValFAT x y fat
+insertFAT [] f = f
+insertFAT (x:[]) f = insertValFAT x 0xFFFA f
+insertFAT (x:y:xs) f = insertFAT (y:xs) $ insertValFAT x y f
 
 insertValFAT :: Word16 -> Word16 -> [Word16] -> [Word16]
-insertValFAT x y fat = (take (int x) fat) ++ [y] ++ (drop ((int x) + 1) fat)
+insertValFAT x y f = (take (int x) f) ++ [y] ++ (drop ((int x) + 1) f)
 
 
 -- Obtain the number of free block available on the VMU
@@ -210,8 +214,8 @@ rawDumpFile fileNo vmu = do
 createRootBlock :: [Word8] -> RootBlock
 createRootBlock fileStr = 
         RootBlock customColor blue red green alpha timeS
-                  locationFAT sizeFAT locationDir 
-                  sizeDir iconShape userBlocksCount
+                  lFAT sFAT lDir 
+                  sDir iShape uBlocksCount
                   unknown1 unknown2
         
         where 
@@ -222,12 +226,12 @@ createRootBlock fileStr =
               red = rootBlockStr !! 0x13
               alpha = rootBlockStr !! 0x14
               timeS = createTimestamp $ drop 0x30 rootBlockStr
-              locationFAT = encodeWord16 $ slice 0x46 0x47 rootBlockStr
-              sizeFAT = encodeWord16 $ slice 0x48 0x49 rootBlockStr
-              locationDir = encodeWord16 $ slice 0x4A 0x4B rootBlockStr
-              sizeDir = encodeWord16 $ slice 0x4C 0x4D rootBlockStr
-              iconShape = encodeWord16 $ slice 0x4E 0x4F rootBlockStr
-              userBlocksCount = encodeWord16 $ slice 0x50 0x51 rootBlockStr
+              lFAT = encodeWord16 $ slice 0x46 0x47 rootBlockStr
+              sFAT = encodeWord16 $ slice 0x48 0x49 rootBlockStr
+              lDir = encodeWord16 $ slice 0x4A 0x4B rootBlockStr
+              sDir = encodeWord16 $ slice 0x4C 0x4D rootBlockStr
+              iShape = encodeWord16 $ slice 0x4E 0x4F rootBlockStr
+              uBlocksCount = encodeWord16 $ slice 0x50 0x51 rootBlockStr
               unknown1 = slice 0x40 0x45 rootBlockStr
               unknown2 = slice 0x52 0x1FF rootBlockStr
 
@@ -235,15 +239,15 @@ createRootBlock fileStr =
 -- Obtain Timestamp
 createTimestamp :: [Word8] -> Timestamp
 createTimestamp mem =
-    Timestamp cen yr mnth day hr min sec dow
+    Timestamp cen yr mnth d hr m sec dow
     
     where 
         cen  = mem !! 0
         yr   = mem !! 1  
         mnth = mem !! 2
-        day  = mem !! 3
+        d    = mem !! 3
         hr   = mem !! 4
-        min  = mem !! 5
+        m    = mem !! 5
         sec  = mem !! 6
         dow  = mem !! 7  
 
@@ -261,12 +265,12 @@ getDirEntry entry =
                 0x33 -> Right Data
                 0xCC -> Right Game
                 0x00 -> Left "File marked as empty"
-                otherwise -> Left ("Unknown type value" ++ (show entry))
+                _ -> Left ("Unknown type value" ++ (show entry))
     
         protected = case entry !! 0x1 of
                 0x00 -> Right False
                 0xFF -> Right True
-                otherwise -> Left ("Unknown protected value" ++ (show entry))
+                _ -> Left ("Unknown protected value" ++ (show entry))
 
         startingB = Right $ encodeWord16 $ slice 0x2 0x3 entry
         name = Right $ map (chr . fromEnum) $ slice 0x4 0xF entry
@@ -279,8 +283,6 @@ createDirectory :: RootBlock -> [Word8] -> [Maybe DirectoryEntry]
 createDirectory rb vmu = map (either (\_  -> Nothing) Just) entries
     where dirBlockStart = fromIntegral $ locationDirectory rb
           noBlocks = fromIntegral $ sizeDirectory rb
-          dirSizeBytes =  blockStart $ fromIntegral noBlocks
-
           entries = 
             concatMap (entriesBlock) [dirBlockStart,dirBlockStart-1..dirBlockStart - (noBlocks -1)]
 
@@ -302,15 +304,15 @@ createFAT rb mem =   map (encodeWord16) $ chunksOf 2 fatMem8
 
 createVMU :: BS.ByteString -> Either String VMU
 createVMU bs 
-    | BS.length bs /= vmuSize = Left ("VMU is incorrect size (" ++ 
+    | (int . BS.length) bs /= vmuSize = Left ("VMU is incorrect size (" ++ 
         (show $ BS.length bs) ++ " bytes) should be exactly " ++ (show vmuSize) ++ 
         "bytes")
-    | otherwise = Right $ VMU rb dirs fat blocks extraBlocks
+    | otherwise = Right $ VMU rb dirs f blocks extraBlocks
         where 
               mem = BS.unpack bs
               rb = createRootBlock mem
               dirs = createDirectory rb mem
-              fat = createFAT rb mem 
+              f = createFAT rb mem 
               blocks = createUserBlocks rb mem
               extraBlocks = take (blockStart $ int leftOverBC) $ 
                 drop (blockStart $ int $  userBlocksCount rb) mem
@@ -331,7 +333,7 @@ exportDirEntry dir = case dir of
     Nothing -> take 32 [0,0..]
     Just d ->  [fileTypeMem] ++  [protectedMem] ++ startBlocks ++ 
                 fileNameMem ++ timeStampMem ++ blockSizeMem ++ headerOffset ++
-                unused
+                notUsed
                     
         where 
             fileTypeMem = case fileType d of
@@ -345,7 +347,7 @@ exportDirEntry dir = case dir of
             fileNameMem = map (fromIntegral . fromEnum) $ take 12 (fileName d) 
             blockSizeMem = splitW16Le $ sizeInBlocks d
             headerOffset = splitW16Le $ offsetInBlocks d
-            unused = take 4 [0x0,0x0..]
+            notUsed = take 4 [0x0,0x0..]
 
 
 exportRootBlock :: RootBlock -> [Word8]
@@ -375,14 +377,14 @@ exportRootBlock rb = start ++ custom ++ blue ++ green ++
         unknown2 =unknownValues2 rb
 
 exportTimestamp :: Timestamp -> [Word8]
-exportTimestamp ts = ct ++ yr ++ mnth ++ dy ++ hr ++ min ++ sec ++ dow
+exportTimestamp ts = ct ++ yr ++ mnth ++ dy ++ hr ++ m ++ sec ++ dow
     where 
         ct   = [century ts]
         yr   = [year ts]
         mnth = [month ts]
         dy   = [day ts]
         hr   = [hour ts]
-        min  = [minute ts]
+        m    = [minute ts]
         sec  = [second ts]
         dow  = [dayOfWeek ts]
 
