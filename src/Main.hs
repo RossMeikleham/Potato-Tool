@@ -4,6 +4,7 @@ import           System.Environment
 import           Text.Printf
 import           VMU
 import           VMUFile
+import           Operations
 
 -- List all files in the file system
 
@@ -28,6 +29,8 @@ listFiles' (x:xs) no format =
           fCopy =  if copyProtected x then "Yes" else "No"
 
 
+-- Remove a file from the file system
+
 listFilesCommand :: [String] -> IO ()
 listFilesCommand args
     | length args < 2 = putStrLn "Expecting vmu file"
@@ -36,14 +39,6 @@ listFilesCommand args
         case createVMU bs of
             Left str -> error str
             Right vmu -> putStrLn $ listFiles vmu
-
-
--- Remove a file from the file system
-
-rm :: Int -> BS.ByteString -> Either String VMU
-rm fileNo vmuBs = do
-    vmu <- createVMU vmuBs
-    clearFile fileNo vmu
 
 
 rmCommand :: [String] -> IO()
@@ -57,14 +52,6 @@ rmCommand args
             Right v -> BS.writeFile (args !! 1) $ BS.pack $ exportVMU v
 
 
--- Inject a nexus DCI format save file into the filesystem
-
-injectDCI :: BS.ByteString -> BS.ByteString -> Either String VMU
-injectDCI vmuBs file = do
-    vmu <- createVMU vmuBs
-    injectDCIFile (BS.unpack file) vmu
-
-
 injectDCICommand :: [String] -> IO()
 injectDCICommand args
     | length args < 3 = putStrLn "Expecting vmu and dci file"
@@ -74,16 +61,6 @@ injectDCICommand args
         case injectDCI vmuBs fileBs of
             Left  x -> putStrLn x
             Right v ->  BS.writeFile (args !! 1) $ BS.pack $ exportVMU v
-
-
--- Extract a file from the filesystem in the nexus DCI format
-
-extractDCI :: Int -> BS.ByteString -> Either String VMUFile
-extractDCI fileNo vmuBs = do
-    vmu <- createVMU vmuBs
-    fInfo <- getEntry fileNo vmu
-    fileRaw <- rawDumpFile fileNo vmu
-    return $ createVMUFileDCI fInfo fileRaw
 
 
 extractDCICommand :: [String] -> IO()
@@ -97,14 +74,6 @@ extractDCICommand args
             Right v -> BS.writeFile (args !! 3) $ BS.pack $ exportVMUFile v
 
 
--- Unlock unused blocks 200 - 240 in the filesystem for use
-
-unlockBlocks :: BS.ByteString -> Either String VMU
-unlockBlocks vmuBs = do
-    vmu <- createVMU vmuBs
-    let rootBlock = root vmu
-    let newRoot = rootBlock {userBlocksCount = 241}
-    return vmu {root = newRoot}
 
 unlockBlocksCommand :: [String] -> IO()
 unlockBlocksCommand args
