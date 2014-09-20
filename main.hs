@@ -1,5 +1,5 @@
 import VMU
-import RawVMUFile
+import VMUFile
 import System.IO
 import System.Environment
 import GHC.IO.Handle.FD
@@ -46,7 +46,8 @@ listFilesCommand args
 injectDCI :: BS.ByteString -> BS.ByteString -> Either String VMU
 injectDCI vmu file = do
     vmu <- createVMU vmu 
-    injectDCIFile (BS.unpack file) vmu
+    --injectDCIFile (BS.unpack file) vmu 
+    Right vmu
 
 
 injectDCICommand :: [String] -> IO()
@@ -57,7 +58,7 @@ injectDCICommand args
         fileBs <- BS.readFile $ args !! 2
         case injectDCI vmuBs fileBs of
             Left  x -> putStrLn x
-            Right y -> putStrLn $ listFiles y
+            Right v ->  BS.writeFile (args !! 1) $ BS.pack $ exportVMU v
 
 executeCommand :: String -> [String] -> IO() 
 executeCommand command args = case args !! 0 of

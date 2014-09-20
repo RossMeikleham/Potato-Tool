@@ -47,8 +47,8 @@ padding 2 bytes
 
 -- VMU Layout --
 -- 0 - 199 blocks, user saves/data
--- 200 - 239 unused
--- 240 - 253 directory
+-- 200 - 240 unused
+-- 241 - 253 directory
 -- 254 FAT
 -- 255 Root Block
 

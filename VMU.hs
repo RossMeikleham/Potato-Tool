@@ -99,7 +99,7 @@ encodeWord16 (a:b:xs) = a' .|. (b' `shiftL` 8)
 -- the first one being the lower byte and the second
 -- entry being the higher byte
 splitW16Le :: Word16 -> [Word8] 
-splitW16Le num = [n `shiftR` 8] ++ [n .&. 0xFF]
+splitW16Le num = [n .&. 0xFF] ++ [n `shiftR` 8]
     where n = fromIntegral num
 
 
@@ -268,7 +268,7 @@ getDirEntry entry =
 
         startingB = Right $ encodeWord16 $ slice 0x2 0x3 entry
         name = Right $ map (chr . fromEnum) $ slice 0x4 0xF entry
-        timeS = Right $ createTimestamp $ drop 0x9 entry
+        timeS = Right $ createTimestamp $ drop 0xF entry
         sizeB = Right $ encodeWord16 $ slice 0x18 0x19 entry
         offsetB = Right $ encodeWord16 $ slice 0x1A 0x1B entry
 
@@ -280,7 +280,7 @@ createDirectory rb vmu = map (either (\_  -> Nothing) Just) entries
           dirSizeBytes =  blockStart $ fromIntegral noBlocks
 
           entries = 
-            concatMap (entriesBlock) [dirBlockStart,dirBlockStart-1..dirBlockStart - noBlocks]
+            concatMap (entriesBlock) [dirBlockStart,dirBlockStart-1..dirBlockStart - (noBlocks -1)]
 
           -- 16 32 bytes entries in 512 byte block
           entriesBlock n = [getDirEntry $ 
@@ -321,14 +321,15 @@ exportVMU vmu = ub ++ eb ++ dirs ++ ft ++ rb
           ub = concat (userBlocks vmu)
           eb = unused vmu
           ft = concatMap (splitW16Le) (fat vmu)
-          dirs = reverse $ concatMap (exportDirEntry) (files vmu)
+          dirs = concat $ reverse $ chunksOf 512 $ concatMap (exportDirEntry) (files vmu)
           rb = exportRootBlock (root vmu)
 
 exportDirEntry :: Maybe DirectoryEntry -> [Word8]
 exportDirEntry dir = case dir of
     Nothing -> take 32 [0,0..]
     Just d ->  [fileTypeMem] ++  [protectedMem] ++ startBlocks ++ 
-                fileNameMem ++ timeStampMem ++ blockSizeMem ++ headerOffset 
+                fileNameMem ++ timeStampMem ++ blockSizeMem ++ headerOffset ++
+                unused
                     
         where 
             fileTypeMem = case fileType d of
@@ -339,9 +340,10 @@ exportDirEntry dir = case dir of
                 True  -> 0xFF 
             startBlocks = splitW16Le $ startingBlock d 
             timeStampMem = exportTimestamp $ timestamp d
-            fileNameMem = map (fromIntegral . fromEnum) $ take 11 (fileName d) 
+            fileNameMem = map (fromIntegral . fromEnum) $ take 12 (fileName d) 
             blockSizeMem = splitW16Le $ sizeInBlocks d
             headerOffset = splitW16Le $ offsetInBlocks d
+            unused = take 4 [0x0,0x0..]
 
 
 exportRootBlock :: RootBlock -> [Word8]
