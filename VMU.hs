@@ -17,6 +17,7 @@ module VMU
 , exportVMU
 , exportDirEntry
 , splitW16Le
+, clearFile
 ) where 
 
 import Data.Word
@@ -110,10 +111,11 @@ splitW16Le num = map (fromIntegral) $ [num .&. 0xFF] ++ [num `shiftR` 8]
 -- from given file no
 getEntry :: Int -> VMU -> Either String DirectoryEntry
 getEntry fileNo vmu  
-    | fileNo >= (length . catMaybes . files) vmu = Left $ "file number " ++ 
+    | fileNo > (length . catMaybes . files) vmu = Left $ "file number " ++ 
         (show fileNo) ++ " doesn't exist, use the \"ls\" command to obtain" ++ 
         "valid files in the vmu"
     | otherwise = Right $ (catMaybes $ files vmu) !! (fileNo - 1)
+
 
 -- Obtain the first N free blocks, starting from the highest
 -- block, returns a list of free blocks the size requested if
@@ -182,11 +184,26 @@ insertDirEntry dir entry
           ys = dropWhile (isJust) dir
 
 
+eraseDirEntry :: [Maybe DirectoryEntry] -> 
+                 Int ->
+                 Either String [Maybe DirectoryEntry]
+eraseDirEntry [] _ = Left "File doesn't exist"
+eraseDirEntry (Just x:xs) 1 = Right (Nothing : xs)
+eraseDirEntry (Just x:xs) n = (++) <$> Right [Just x] <*> eraseDirEntry xs (n - 1)
+eraseDirEntry (Nothing:xs) n = (++) <$> Right [Nothing] <*> eraseDirEntry xs n
+
+
 -- Update the FAT for new blocks for a file
 insertFAT :: [Word16] -> [Word16] -> [Word16]
 insertFAT [] f = f
 insertFAT (x:[]) f = insertValFAT x 0xFFFA f
 insertFAT (x:y:xs) f = insertFAT (y:xs) $ insertValFAT x y f
+
+
+-- Marks blocks as unallocated in FAT
+removeFAT :: [Word16] -> [Word16] -> [Word16]
+removeFAT [] f = f
+removeFAT (x:xs) f = removeFAT xs $ insertValFAT x 0xFFFC f
 
 insertValFAT :: Word16 -> Word16 -> [Word16] -> [Word16]
 insertValFAT x y f = (take (int x) f) ++ [y] ++ (drop ((int x) + 1) f)
@@ -207,6 +224,19 @@ rawDumpFile fileNo vmu = do
     fileInfo <- getEntry fileNo vmu 
     let blockNos = getBlocks' fileInfo (fat vmu)
     return $ concatMap (\b -> blockMem !! fromIntegral b) blockNos
+
+
+-- Clear the numbered file from the filesystem
+clearFile :: Int -> VMU -> Either String VMU
+clearFile fileNo vmu = do    
+    let blockMem = userBlocks vmu
+    fileInfo <- getEntry fileNo vmu 
+    let blockNos = getBlocks' fileInfo (fat vmu)
+        newBlocks = insertBlocks blockNos (take (length blockNos) zeroBlocks) blockMem
+        zeroBlocks = repeat $ take 512 [0,0..]
+        newFat = removeFAT blockNos $ fat vmu
+    newDir <- eraseDirEntry (files vmu) fileNo
+    return $ vmu {files = newDir, userBlocks = newBlocks, fat = newFat} 
 
 
 -- Obtain the last block Root Block so we can determine

@@ -37,6 +37,26 @@ listFilesCommand args
             Left str -> error str
             Right vmu -> putStrLn $ listFiles vmu
 
+
+-- Remove a file from the file system
+ 
+rm :: Int -> BS.ByteString -> Either String VMU
+rm fileNo vmuBs = do
+    vmu <- createVMU vmuBs
+    clearFile fileNo vmu    
+
+
+rmCommand :: [String] -> IO()
+rmCommand args
+    | length args < 3 = putStrLn "Expecting vmu file and file no"
+    | otherwise = do
+        bs <- BS.readFile $ args !! 1
+        let fileNo = read $ args !! 2
+        case rm fileNo bs of
+            Left x -> putStrLn x
+            Right v -> BS.writeFile (args !! 1) $ BS.pack $ exportVMU v
+        
+
 -- Inject a nexus DCI format save file into the filesystem
 
 injectDCI :: BS.ByteString -> BS.ByteString -> Either String VMU
@@ -98,6 +118,7 @@ unlockBlocksCommand args
 executeCommand :: String -> [String] -> IO() 
 executeCommand command args = case args !! 0 of
     "ls" -> listFilesCommand args
+    "rm" -> rmCommand args
     "injectDCI" -> injectDCICommand args 
     "extractDCI" -> extractDCICommand args
     "unlockBlocks" -> unlockBlocksCommand args 
