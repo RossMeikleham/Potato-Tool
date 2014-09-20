@@ -62,7 +62,7 @@ data RootBlock = RootBlock
     , iconShape :: Word16
     , userBlocksCount :: Word16
     , unknownValues1 :: [Word8] -- 0x40 - 0x45
-    , unknownValues2 :: [Word8] -- 0x52 - 0xFF
+    , unknownValues2 :: [Word8] -- 0x52 - 0x1FF
     } deriving Show
 
 
@@ -227,7 +227,7 @@ createRootBlock fileStr =
               iconShape = encodeWord16 $ slice 0x4E 0x4F rootBlockStr
               userBlocksCount = encodeWord16 $ slice 0x50 0x51 rootBlockStr
               unknown1 = slice 0x40 0x45 rootBlockStr
-              unknown2 = slice 0x52 0xFF rootBlockStr
+              unknown2 = slice 0x52 0x1FF rootBlockStr
 
 
 -- Obtain Timestamp
