@@ -115,6 +115,17 @@ unlockBlocksCommand args
             Left x -> putStrLn x
             Right v ->  BS.writeFile (args !! 1) $ BS.pack $ exportVMU v
 
+helpCommand :: IO ()
+helpCommand = do
+   putStrLn "Commands:"
+   putStrLn "ls VMUFILE  --List all files in the VMU"
+   putStrLn "rm VMUFILE FILENO  --Remove the specified file from the VMU"
+   putStrLn "injectDCI VMUFILE DCIFILE   --Inject a DCI save file into the VMU"
+   putStrLn $ "extractDCI VMUFILE FILENO OUTFILE  --Extract the specified file " ++
+            "from the VMU and save it in DCI format as the specifed out file" 
+   putStrLn $ "unlockBlocks VMUFILE  --Unlock the unused 41 blocks on the VMU for" ++
+        " extra storage space"
+
 executeCommand :: String -> [String] -> IO() 
 executeCommand command args = case args !! 0 of
     "ls" -> listFilesCommand args
@@ -122,7 +133,9 @@ executeCommand command args = case args !! 0 of
     "injectDCI" -> injectDCICommand args 
     "extractDCI" -> extractDCICommand args
     "unlockBlocks" -> unlockBlocksCommand args 
-    _ -> error $ "unknown command " ++ command
+    "help" -> helpCommand
+    _ -> error $ "unknown command " ++ command ++ 
+        "\nEnter \"help\" for a list of commands"
 
 main :: IO()
 main = do 
