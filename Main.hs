@@ -12,7 +12,7 @@ import Text.Printf
 listFiles :: VMU -> String
 listFiles vmu = 
     (printf titleFormat "" "Name" "Type" "Size" "StartBlock" "CopyProtected") ++
-    (listFiles' (catMaybes $ files vmu) 0 fileFormat)
+    (listFiles' (catMaybes $ files vmu) 1 fileFormat)
 
     where titleFormat = "%5s  %-10s  %-4s  %-4s  %-10s  %-13s\n" 
           fileFormat  = "%2d:  %-11s  %-4s  %-4s  %-10s  %-13s\n"
@@ -31,8 +31,6 @@ listFiles' (x:xs) no format =
           fCopy =  if copyProtected x then "Yes" else "No"
 
 
-
-
 listFilesCommand :: [String] -> IO ()
 listFilesCommand args 
     | length args < 2 = putStrLn "Expecting vmu file"
@@ -44,8 +42,8 @@ listFilesCommand args
 
 
 injectDCI :: BS.ByteString -> BS.ByteString -> Either String VMU
-injectDCI vmu file = do
-    vmu <- createVMU vmu 
+injectDCI vmuBs file = do
+    vmu <- createVMU vmuBs 
     injectDCIFile (BS.unpack file) vmu 
 
 
@@ -59,10 +57,31 @@ injectDCICommand args
             Left  x -> putStrLn x
             Right v ->  BS.writeFile (args !! 1) $ BS.pack $ exportVMU v
 
+
+extractDCI :: Int -> BS.ByteString -> Either String VMUFile
+extractDCI fileNo vmuBs = do
+    vmu <- createVMU vmuBs
+    fileInfo <- getEntry fileNo vmu
+    fileRaw <- rawDumpFile fileNo vmu
+    return $ createVMUFileDCI fileInfo fileRaw    
+
+
+extractDCICommand :: [String] -> IO()
+extractDCICommand args
+    | length args < 4 = putStrLn "Expecting vmu file, dci file number and output file name"
+    | otherwise = do        
+        vmuBs <- BS.readFile $ args !! 1
+        let fileNo = read (args !! 2) :: Int
+        case extractDCI fileNo vmuBs of
+            Left x -> putStrLn x
+            Right v -> BS.writeFile (args !! 3) $ BS.pack $ exportVMUFile $ v
+
+
 executeCommand :: String -> [String] -> IO() 
 executeCommand command args = case args !! 0 of
     "ls" -> listFilesCommand args
     "injectDCI" -> injectDCICommand args 
+    "extractDCI" -> extractDCICommand args
     _ -> error $ "unknown command " ++ command
 
 main :: IO()

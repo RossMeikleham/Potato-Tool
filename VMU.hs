@@ -12,6 +12,7 @@ module VMU
 , getNFreeBlocks
 , createVMU
 , getDirEntry
+, getEntry
 , exportVMU
 , exportDirEntry
 , splitW16Le
@@ -105,10 +106,11 @@ splitW16Le num = map (fromIntegral) $ [num .&. 0xFF] ++ [num `shiftR` 8]
 
 -- Obtain file information in the directory
 -- from given file no
-getEntry :: Int -> VMU -> Maybe DirectoryEntry
+getEntry :: Int -> VMU -> Either String DirectoryEntry
 getEntry fileNo vmu  
-    | fileNo >= (length . files) vmu = Nothing
-    | otherwise = Just $ (catMaybes $ files vmu) !! fileNo
+    | fileNo >= (length . files) vmu = Left $ "file number " ++ (show fileNo) ++ 
+        "doesn't exist, use \"ls\" command to obtain valid files in the vmu"
+    | otherwise = Right $ (catMaybes $ files vmu) !! (fileNo - 1)
 
 -- Obtain the first N free blocks, starting from the highest
 -- block, returns a list of free blocks the size requested if
@@ -195,7 +197,7 @@ getFreeBlocks vmu =
         fatMem = fat vmu
 
 -- Obtain a raw dump for a given file in the filesystem
-rawDumpFile :: Int -> VMU -> Maybe [Word8]
+rawDumpFile :: Int -> VMU -> Either String [Word8]
 rawDumpFile fileNo vmu = do 
     let blockMem = userBlocks vmu
     fileInfo <- getEntry fileNo vmu 

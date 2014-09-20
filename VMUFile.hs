@@ -6,6 +6,7 @@ module VMUFile
 , injectDCIFile
 , injectRawFile
 , exportVMUFile
+, createVMUFileDCI
 )
 where
 
@@ -33,6 +34,8 @@ injectDCIFile mem vmu = do
     let dciFile = VMUFile (fileInfo file) (map reverseDCIBytes $ blocks file)
     injectVMUFile dciFile vmu
     
+createVMUFileDCI :: DirectoryEntry -> [Word8] -> VMUFile
+createVMUFileDCI entry raw = VMUFile entry $ chunksOf 512 $ reverseDCIBytes raw
 
 injectRawFile :: [Word8] -> VMU -> Either String VMU
 injectRawFile mem vmu = do
