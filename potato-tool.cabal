@@ -22,5 +22,7 @@ executable potato-tool
   -- other-extensions:    
   build-depends:       base >=4.7 && <4.8, binary >=0.7 && <0.8, split >=0.2 && <0.3, bytestring >=0.10 && <0.11
   ghc-options: -Wall
-  -- hs-source-dirs:      
+
+  hs-source-dirs: src
+      
   default-language:    Haskell2010
