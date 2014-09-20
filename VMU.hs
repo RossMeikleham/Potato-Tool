@@ -14,6 +14,7 @@ module VMU
 , getDirEntry
 , exportVMU
 , exportDirEntry
+, splitW16Le
 ) where 
 
 import Data.Word
@@ -99,8 +100,7 @@ encodeWord16 (a:b:xs) = a' .|. (b' `shiftL` 8)
 -- the first one being the lower byte and the second
 -- entry being the higher byte
 splitW16Le :: Word16 -> [Word8] 
-splitW16Le num = [n .&. 0xFF] ++ [n `shiftR` 8]
-    where n = fromIntegral num
+splitW16Le num = map (fromIntegral) $ [num .&. 0xFF] ++ [num `shiftR` 8]
 
 
 -- Obtain file information in the directory
@@ -219,7 +219,7 @@ createRootBlock fileStr =
               green = rootBlockStr !! 0x12
               red = rootBlockStr !! 0x13
               alpha = rootBlockStr !! 0x14
-              timeS = createTimestamp $ drop 0x29 rootBlockStr
+              timeS = createTimestamp $ drop 0x30 rootBlockStr
               locationFAT = encodeWord16 $ slice 0x46 0x47 rootBlockStr
               sizeFAT = encodeWord16 $ slice 0x48 0x49 rootBlockStr
               locationDir = encodeWord16 $ slice 0x4A 0x4B rootBlockStr
@@ -268,7 +268,7 @@ getDirEntry entry =
 
         startingB = Right $ encodeWord16 $ slice 0x2 0x3 entry
         name = Right $ map (chr . fromEnum) $ slice 0x4 0xF entry
-        timeS = Right $ createTimestamp $ drop 0xF entry
+        timeS = Right $ createTimestamp $ drop 0x10 entry
         sizeB = Right $ encodeWord16 $ slice 0x18 0x19 entry
         offsetB = Right $ encodeWord16 $ slice 0x1A 0x1B entry
 
