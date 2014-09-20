@@ -46,8 +46,7 @@ listFilesCommand args
 injectDCI :: BS.ByteString -> BS.ByteString -> Either String VMU
 injectDCI vmu file = do
     vmu <- createVMU vmu 
-    --injectDCIFile (BS.unpack file) vmu 
-    Right vmu
+    injectDCIFile (BS.unpack file) vmu 
 
 
 injectDCICommand :: [String] -> IO()

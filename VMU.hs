@@ -162,7 +162,7 @@ insertBlocks blockNos newBlocks curBlocks =
 -- Insert a single block into the given position of total blocks
 insertBlock :: Int -> [Word8] -> [[Word8]] -> [[Word8]]
 insertBlock blockNo newBlock oldBlocks =
-    (take (blockNo) oldBlocks) ++ [newBlock] ++ (drop (blockNo - 1) oldBlocks) 
+    (take (blockNo) oldBlocks) ++ [newBlock] ++ (drop (blockNo + 1) oldBlocks) 
 
 -- Attempt to insert a directory entry into
 -- the VMU directory in the first empty spot,
@@ -183,7 +183,7 @@ insertFAT (x:[]) fat = insertValFAT x 0xFFFA fat
 insertFAT (x:y:xs) fat = insertFAT (y:xs) $ insertValFAT x y fat
 
 insertValFAT :: Word16 -> Word16 -> [Word16] -> [Word16]
-insertValFAT x y fat = (take (int x) fat) ++ [y] ++ (drop ((int x) - 1) fat)
+insertValFAT x y fat = (take (int x) fat) ++ [y] ++ (drop ((int x) + 1) fat)
 
 
 -- Obtain the number of free block available on the VMU
