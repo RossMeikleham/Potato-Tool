@@ -2,9 +2,12 @@
 -- documentation, see http://haskell.org/cabal/users-guide/
 
 name:                potato-tool
-version:             0.1.0
-synopsis:            A Portable command line toolset written in Haskell for interacting with the Dreamcast Virtual Memory Unit filesystem. 
-                     Named after the 8-bit Sanyo LC8670 Potato CPU contained in the VMU.
+version:             0.1.0.1
+synopsis:            Command line Dreamcast VMU filesystem toolset.
+
+description:    A Portable command line toolset written in Haskell for interacting with the Dreamcast Virtual Memory Unit filesystem. 
+                Named after the 8-bit Sanyo LC8670 Potato CPU contained in the VMU. It allows for injecting, extracing, removing, and
+                viewing files in a dreamcast VMU file.
 -- description:         
 homepage:            https://github.com/RossMeikleham/Potato_Tool
 license:             GPL-2
@@ -16,6 +19,11 @@ category:            System
 build-type:          Simple
 -- extra-source-files:  
 cabal-version:       >=1.10
+
+
+source-repository head 
+    type: git
+    location: git://github.com/RossMeikleham/Potato-Tool.git
 
 executable potato-tool
   main-is:             Main.hs
