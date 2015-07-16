@@ -3,7 +3,8 @@
 
 name:                potato-tool
 version:             0.1.0
-synopsis:            command line toolset for interacting with the Dreamcast Virtual Memory Unit filesystem
+synopsis:            A Portable command line toolset written in Haskell for interacting with the Dreamcast Virtual Memory Unit filesystem. 
+                     Named after the 8-bit Sanyo LC8670 Potato CPU contained in the VMU.
 -- description:         
 homepage:            https://github.com/RossMeikleham/Potato_Tool
 license:             GPL-2

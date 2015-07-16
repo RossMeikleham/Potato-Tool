@@ -5,11 +5,11 @@ import qualified Data.ByteString.Lazy as BS
 import VMU
 import VMUFile
 
+-- |Remove a file from the filesystem
 rm :: Int -> BS.ByteString -> Either String VMU
 rm fileNo vmuBs = do
     vmu <- createVMU vmuBs
     clearFile fileNo vmu
-
 
 
 -- |Inject a nexus DCI format save file into the filesystem
