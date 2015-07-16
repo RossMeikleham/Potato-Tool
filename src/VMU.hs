@@ -28,8 +28,29 @@ import           Data.List.Split
 import           Data.Maybe
 import           Data.Word
 
+-- | Dreamcast VMU filesystem is made up of 255 blocks, each block contains 
+--   512 bytes of data. The blocks in the filesystem are of the following  
+--   structure:
+--   
+--  Root block: 255th block: 
+--  Contains "core" info on the filesystem such as locations and 
+--  sizes of FAT and directory system files.
+--
+--  Unused blocks (200 - 240): 
+--  These blocks can be freed for use as user data blocks.
+--
+--  FAT block 254th block: 
+--  Works similar to a MS-DOS FAT16 File Allocation Table. 
+--
+--  Directory blocks (241 - 253):
+--  The Directory lists all the user files stored in the VMS. The Directory
+--  consists of a sequence of 32-byte entries each potentially describing
+--  a file. 
+--
+--  User Data blocks (0 - 239):
+--  Contains binary file data
 data VMU = VMU
-    { root       :: RootBlock
+    { root       :: RootBlock 
     , files      :: [Maybe DirectoryEntry]
     , fat        :: [Word16]
     , userBlocks :: [[Word8]]
@@ -37,6 +58,7 @@ data VMU = VMU
     } deriving Show
 
 
+-- | Dreamcast timestamp
 data Timestamp = Timestamp
     { century   :: Word8
     , year      :: Word8
@@ -45,69 +67,81 @@ data Timestamp = Timestamp
     , hour      :: Word8
     , minute    :: Word8
     , second    :: Word8
-    , dayOfWeek :: Word8
+    , dayOfWeek :: Word8 -- 0 (Monday) - 6 (Sunday)
     } deriving Show
 
 
+-- | Data on the Root Block
 data RootBlock = RootBlock
-    { customVMSColor    :: Bool
-    , blueVMS           :: Word8
-    , redVMS            :: Word8
-    , greenVMS          :: Word8
-    , alphaComponent    :: Word8
-    , timeStamp         :: Timestamp
-    , locationFAT       :: Word16
-    , sizeFAT           :: Word16
-    , locationDirectory :: Word16
-    , sizeDirectory     :: Word16
-    , iconShape         :: Word16
-    , userBlocksCount   :: Word16
+    { customVMSColor    :: Bool -- 0x010
+    , blueVMS           :: Word8 -- 0x011
+    , redVMS            :: Word8 -- 0x012
+    , greenVMS          :: Word8 -- 0x013
+    , alphaComponent    :: Word8 -- 0x014
+    , timeStamp         :: Timestamp -- 0x030 -0x037
+    , locationFAT       :: Word16 -- 0x046 - 0x047
+    , sizeFAT           :: Word16 -- 0x048 - 0x049
+    , locationDirectory :: Word16 -- 0x04A - 0x04B
+    , sizeDirectory     :: Word16 -- 0x04C - 0x04D
+    , iconShape         :: Word16 -- 0x04E - 0x04F
+    , userBlocksCount   :: Word16 -- 0x050 - 0x051
     , unknownValues1    :: [Word8] -- 0x40 - 0x45
     , unknownValues2    :: [Word8] -- 0x52 - 0x1FF
     } deriving Show
 
 
+-- | Data for each Directory Entry block
 data DirectoryEntry = DirectoryEntry
-    { fileType       :: FileType
-    , copyProtected  :: Bool
-    , startingBlock  :: Word16
-    , fileName       :: String
-    , timestamp      :: Timestamp
-    , sizeInBlocks   :: Word16
-    , offsetInBlocks :: Word16
+    { fileType       :: FileType -- 0x00
+    , copyProtected  :: Bool -- 0x01
+    , startingBlock  :: Word16 -- 0x02 - 0x03
+    , fileName       :: String -- 0x04 - 0x0F
+    , timestamp      :: Timestamp -- 0x10 - 0x17
+    , sizeInBlocks   :: Word16 -- 0x18 - 0x19
+    , offsetInBlocks :: Word16 -- 0x1A - 0x1B
     } deriving Show
 
+
+-- | Files can either be Game files which are standalone
+--   VMU games, or data files typically storing data
+--   from Dreamcast games
 data FileType = Game | Data deriving Show
+
 
 vmuSize :: Int
 vmuSize = 128 * 1024 --128KB vmu
 
+
 int :: Integral a => a -> Int
 int x = fromIntegral x :: Int
+
 
 slice :: Int -> Int -> [Word8] -> [Word8]
 slice a b xs = take (b - a + 1) (drop a xs)
 
--- Work out starting location in file for given block
+
+-- | Work out starting location in file for given block
 blockStart :: Int -> Int
 blockStart b = 512 * b
 
--- Concatonate two Word8 values into a little
--- endian Word16
+
+-- |Concatonate two Word8 values into a little
+--  endian Word16
 encodeWord16 :: [Word8] -> Word16
 encodeWord16 (a:b:_) = a' .|. (b' `shiftL` 8)
     where a' = fromIntegral a
           b' = fromIntegral b
 encodeWord16 _ = error "Need 2 Word8s"
 
--- Split a Word 16 into two Word 8s,
+
+-- |Split a Word 16 into two Word 8s,
 -- the first one being the lower byte and the second
 -- entry being the higher byte
 splitW16Le :: Word16 -> [Word8]
 splitW16Le num = map fromIntegral $ (num .&. 0xFF) : [num `shiftR` 8]
 
 
--- Obtain file information in the directory
+-- |Obtain file information in the directory
 -- from given file no
 getEntry :: Int -> VMU -> Either String DirectoryEntry
 getEntry fileNo vmu
@@ -117,7 +151,7 @@ getEntry fileNo vmu
     | otherwise = Right $ catMaybes (files vmu) !! (fileNo - 1)
 
 
--- Obtain the first N free blocks, starting from the highest
+-- |Obtain the first N free blocks, starting from the highest
 -- block, returns a list of free blocks the size requested if
 -- available, otherwise returns an error message
 getNFreeBlocks :: Int -> VMU -> Either String [Word16]
@@ -131,12 +165,13 @@ getNFreeBlocks n vmu
         fatMem = toIndicies 0 $ fat vmu
         highestBlock = fromIntegral $ userBlocksCount $ root vmu
 
+
 toIndicies :: Word16 -> [a] -> [(Word16, a)]
 toIndicies _ [] = []
 toIndicies i (x:xs)  = (i , x) : toIndicies (i + 1) xs
 
 
--- Obtain block numbers for given file
+-- |Obtain block numbers for given file
 getBlocks :: Int -> VMU -> Maybe [Word16]
 getBlocks fileNo vmu
     | fileNo >= (length . files) vmu = Nothing
@@ -158,7 +193,7 @@ getBlocks'' blockNo fatMem
 
         where nextBlock = fatMem !! fromIntegral blockNo
 
---Insert multiple blocks with their given position into the
+-- |Insert multiple blocks with their given position into the
 --user blocks
 insertBlocks :: [Word16] -> [[Word8]] -> [[Word8]] -> [[Word8]]
 insertBlocks blockNos newBlocks curBlocks =
@@ -166,14 +201,15 @@ insertBlocks blockNos newBlocks curBlocks =
     where
         bNos = map fromIntegral blockNos
 
--- Insert a single block into the given position of total blocks
+-- | Insert a single block into the given position of total blocks
 insertBlock :: Int -> [Word8] -> [[Word8]] -> [[Word8]]
 insertBlock blockNo newBlock oldBlocks =
     take blockNo oldBlocks ++ [newBlock] ++ drop (blockNo + 1) oldBlocks
 
--- Attempt to insert a directory entry into
--- the VMU directory in the first empty spot,
--- returns modified directory if successful
+
+-- | Attempt to insert a directory entry into
+--   the VMU directory in the first empty spot,
+--   returns modified directory if successful
 insertDirEntry :: [Maybe DirectoryEntry] ->
                   DirectoryEntry ->
                   Either String [Maybe DirectoryEntry]
@@ -193,14 +229,14 @@ eraseDirEntry (Just x:xs) n = (++) <$> Right [Just x] <*> eraseDirEntry xs (n - 
 eraseDirEntry (Nothing:xs) n = (++) <$> Right [Nothing] <*> eraseDirEntry xs n
 
 
--- Update the FAT for new blocks for a file
+-- |Update the FAT for new blocks for a file
 insertFAT :: [Word16] -> [Word16] -> [Word16]
 insertFAT [] f = f
 insertFAT (x:[]) f = insertValFAT x 0xFFFA f
 insertFAT (x:y:xs) f = insertFAT (y:xs) $ insertValFAT x y f
 
 
--- Marks blocks as unallocated in FAT
+-- |Marks blocks as unallocated in FAT
 removeFAT :: [Word16] -> [Word16] -> [Word16]
 removeFAT xs f = foldl (\ s x -> insertValFAT x 0xFFFC s) f xs
 
@@ -208,7 +244,7 @@ insertValFAT :: Word16 -> Word16 -> [Word16] -> [Word16]
 insertValFAT x y f = take (int x) f ++ [y] ++ drop (int x + 1) f
 
 
--- Obtain the number of free block available on the VMU
+-- |Obtain the number of free block available on the VMU
 getFreeBlocks :: VMU -> Word16
 getFreeBlocks vmu =
     fromIntegral $ length $ filter (== 0xFFFC) $ take blockCount fatMem
@@ -216,7 +252,7 @@ getFreeBlocks vmu =
         blockCount = fromIntegral $ userBlocksCount $ root vmu
         fatMem = fat vmu
 
--- Obtain a raw dump for a given file in the filesystem
+-- |Obtain a raw dump for a given file in the filesystem
 rawDumpFile :: Int -> VMU -> Either String [Word8]
 rawDumpFile fileNo vmu = do
     let blockMem = userBlocks vmu
@@ -225,7 +261,7 @@ rawDumpFile fileNo vmu = do
     return $ concatMap (\b -> blockMem !! fromIntegral b) blockNos
 
 
--- Clear the numbered file from the filesystem
+-- |Clear the numbered file from the filesystem
 clearFile :: Int -> VMU -> Either String VMU
 clearFile fileNo vmu = do
     let blockMem = userBlocks vmu
@@ -238,7 +274,7 @@ clearFile fileNo vmu = do
     return $ vmu {files = newDir, userBlocks = newBlocks, fat = newFat}
 
 
--- Obtain the last block Root Block so we can determine
+-- |Obtain the last block Root Block so we can determine
 -- information on the file system to operate on it
 createRootBlock :: [Word8] -> RootBlock
 createRootBlock fileStr =
@@ -265,7 +301,7 @@ createRootBlock fileStr =
               unknown2 = slice 0x52 0x1FF rootBlockStr
 
 
--- Obtain Timestamp
+-- |Obtain Timestamp
 createTimestamp :: [Word8] -> Timestamp
 createTimestamp mem =
     Timestamp cen yr mnth d hr m sec dow
@@ -280,7 +316,7 @@ createTimestamp mem =
         sec  = mem !! 6
         dow  = mem !! 7
 
--- Read 32 Bytes entry into a Directory Entry
+-- |Read 32 Bytes entry into a Directory Entry
 -- If file type is none or unrecognized value is read in
 -- then Nothing is returned as it is not a valid directory entry
 -- TODO possibly distinguish between corrupt and no file

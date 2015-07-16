@@ -6,8 +6,6 @@ import           VMU
 import           VMUFile
 import           Operations
 
--- List all files in the file system
-
 listFiles :: VMU -> String
 listFiles vmu =
     printf titleFormat "" "Name" "Type" "Size" "StartBlock" "CopyProtected" ++
@@ -29,8 +27,7 @@ listFiles' (x:xs) no format =
           fCopy =  if copyProtected x then "Yes" else "No"
 
 
--- Remove a file from the file system
-
+-- | List all files in the file system
 listFilesCommand :: [String] -> IO ()
 listFilesCommand args
     | length args < 2 = putStrLn "Expecting vmu file"
@@ -41,6 +38,7 @@ listFilesCommand args
             Right vmu -> putStrLn $ listFiles vmu
 
 
+-- | Remove a file from the file system
 rmCommand :: [String] -> IO()
 rmCommand args
     | length args < 3 = putStrLn "Expecting vmu file and file no"
@@ -52,6 +50,7 @@ rmCommand args
             Right v -> BS.writeFile (args !! 1) $ BS.pack $ exportVMU v
 
 
+-- | Inject a Nexus DCI save into the file system
 injectDCICommand :: [String] -> IO()
 injectDCICommand args
     | length args < 3 = putStrLn "Expecting vmu and dci file"
@@ -63,6 +62,7 @@ injectDCICommand args
             Right v ->  BS.writeFile (args !! 1) $ BS.pack $ exportVMU v
 
 
+-- | Extract a file in the file system in Nexus DCI save format
 extractDCICommand :: [String] -> IO()
 extractDCICommand args
     | length args < 4 = putStrLn "Expecting vmu file, dci file number and output file name"
@@ -74,7 +74,7 @@ extractDCICommand args
             Right v -> BS.writeFile (args !! 3) $ BS.pack $ exportVMUFile v
 
 
-
+-- | Unlock the extra 41 blocks of memory on the VMU
 unlockBlocksCommand :: [String] -> IO()
 unlockBlocksCommand args
     | length args < 2 = putStrLn "Expecting vmu file"
@@ -84,6 +84,8 @@ unlockBlocksCommand args
             Left x -> putStrLn x
             Right v ->  BS.writeFile (args !! 1) $ BS.pack $ exportVMU v
 
+
+-- | Display options
 helpCommand :: IO ()
 helpCommand = do
    putStrLn "Commands:"
@@ -94,6 +96,7 @@ helpCommand = do
             "from the VMU and save it in DCI format as the specifed out file"
    putStrLn $ "unlockBlocks VMUFILE  --Unlock the unused 41 blocks on the VMU for" ++
         " extra storage space"
+
 
 executeCommand :: String -> [String] -> IO()
 executeCommand command args = case head args of

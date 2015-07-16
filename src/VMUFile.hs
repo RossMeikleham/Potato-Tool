@@ -17,7 +17,7 @@ data VMUFile = VMUFile
     }
 
 
--- DCI file format has bytes for each block reversed in groups of 4,
+-- |DCI file format has bytes for each block reversed in groups of 4,
 -- we need to reverse these bytes when importing and exporting
 -- to read/write correctly to an ordinary Dreamcast VMU
 reverseDCIBytes :: [Word8] -> [Word8]
