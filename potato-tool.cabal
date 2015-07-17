@@ -2,7 +2,7 @@
 -- documentation, see http://haskell.org/cabal/users-guide/
 
 name:                potato-tool
-version:             0.1.0.1
+version:             0.1.0.2
 synopsis:            Command line Dreamcast VMU filesystem toolset.
 
 description:    A Portable command line toolset written in Haskell for interacting with the Dreamcast Virtual Memory Unit filesystem. 
@@ -27,7 +27,7 @@ source-repository head
 
 executable potato-tool
   main-is:             Main.hs
-  -- other-modules:       
+  other-modules: VMU, VMUFile, Operations      
   -- other-extensions:    
   build-depends:       base >=4 && <5, binary >=0.7 && <0.8, split >=0.2 && <0.3, bytestring >=0.10 && <0.11
   ghc-options: -Wall
