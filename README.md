@@ -1,6 +1,8 @@
 Potato Tool
 ===========
 
+[![Build Status](https://travis-ci.org/RossMeikleham/Potato-Tool.svg?branch=master)](https://travis-ci.org/RossMeikleham/Potato-Tool)
+
 A Portable command line toolset written in Haskell for interacting with the Dreamcast Virtual Memory Unit filesystem. Named after the 8-bit Sanyo LC8670 "Potato" CPU contained in the VMU
 
 The main reason I created this was to be able to rip/burn individual saves from/to a VMU flash image on my Linux machine to use in Dreamcast emulators such as [Reicast](http://reicast.com/). I wasn't able to find any other tools available that weren't Windows only.
