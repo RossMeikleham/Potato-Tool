@@ -131,6 +131,7 @@ script:
 - |
   case "$BUILD" in
     stack)
+      stack setup
       stack --no-terminal build #$ARGS test --haddock --no-haddock-deps
       ;;
     cabal)
