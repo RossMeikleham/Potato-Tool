@@ -131,8 +131,7 @@ script:
 - |
   case "$BUILD" in
     stack)
-      stack setup
-      stack --no-terminal build #$ARGS test --haddock --no-haddock-deps
+      stack --no-terminal $ARGS test --haddock --no-haddock-deps
       ;;
     cabal)
       cabal configure --enable-tests --enable-benchmarks -v2 --ghc-options="-O0 -Werror"
