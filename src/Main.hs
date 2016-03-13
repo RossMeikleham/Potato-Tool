@@ -1,11 +1,22 @@
+{-# LANGUAGE DeriveDataTypeable, TypeFamilies, OverloadedStrings, StandaloneDeriving, FlexibleInstances #-}
+
+module Main where
+
 import qualified Data.ByteString.Lazy as BS
 import           Data.Maybe
 import           System.Environment
 import           Text.Printf
+import           Data.Typeable as T
+import           Data.Bits
+import           Data.Word
+import           Control.Concurrent
+import           Data.Proxy
+import           Graphics.QML
 import           VMU
 import           VMUFile
 import           Operations
 
+{-
 listFiles :: VMU -> String
 listFiles vmu =
     printf titleFormat "" "Name" "Type" "Size" "StartBlock" "CopyProtected" ++
@@ -109,13 +120,47 @@ executeCommand command args = case head args of
     _ -> error $ "unknown command " ++ command ++
         "\nEnter \"help\" for a list of commands"
 
+-}
+
+newtype VMULoaded = VMULoaded (Maybe VMU)
+
+noVMU :: VMULoaded
+noVMU = VMULoaded Nothing
+
+deriving instance Typeable VMULoaded
+
+data ContextVMU = ContextVMU
+                { _vmu :: MVar (ObjRef VMULoaded)
+                } deriving Typeable
+
+
+-- Signals
+data VMUChanged deriving Typeable
+
+instance SignalKeyClass VMUChanged where
+    type SignalParams VMUChanged = IO ()
+
+
+instance DefaultClass ContextVMU where
+    classMembers = [
+        defPropertySigRO "vmu" (Proxy :: Proxy VMUChanged) $ readMVar . _vmu . fromObjRef
+       ,defMethod "addFile" addFile]
+
+
+addFile :: ObjRef ContextVMU -> IO () 
+addFile co = print "Add File Signalled"
+
+instance DefaultClass VMULoaded where
+    classMembers = []
+
+
 main :: IO()
 main = do
-        args <- getArgs
-        progName <- getProgName
 
-        let command = head args
+    l <- newMVar =<< newObjectDC noVMU -- Start off with no VMU
+    tc <- newObjectDC $ ContextVMU l
 
-        if length args <= 0
-            then putStrLn ("Usage " ++ progName ++ " [vmu file]")
-            else executeCommand command args
+    runEngineLoop defaultEngineConfig {
+      initialDocument = fileDocument "qml/potato_tool.qml"
+    , contextObject = Just $ anyObjRef tc
+    }

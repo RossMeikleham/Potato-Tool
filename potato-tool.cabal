@@ -3,11 +3,10 @@
 
 name:                potato-tool
 version:             0.1.0.2
-synopsis:            Command line Dreamcast VMU filesystem toolset.
+synopsis:            Dreamcast VMU filesystem toolset.
 
-description:    A Portable command line toolset written in Haskell for interacting with the Dreamcast Virtual Memory Unit filesystem. 
-                Named after the 8-bit Sanyo LC8670 Potato CPU contained in the VMU. It allows for injecting, extracing, removing, and
-                viewing files in a dreamcast VMU file.
+description:    A Portable toolset written in Haskell for interacting with the Dreamcast Virtual Memory Unit filesystem. Named after the 8-bit Sanyo LC8670 Potato CPU contained in the VMU. It allows for injecting, extracing, removing, and viewing files in a dreamcast VMU file.
+
 -- description:         
 homepage:            https://github.com/RossMeikleham/Potato_Tool
 license:             GPL-2
@@ -29,7 +28,7 @@ executable potato-tool
   main-is:             Main.hs
   other-modules: VMU, VMUFile, Operations      
   -- other-extensions:    
-  build-depends:       base >=4 && < 5, binary >=0.7, split >=0.2, bytestring >=0.10
+  build-depends:       base >=4 && < 5, binary >=0.7, split >=0.2, bytestring >=0.10, hsqml >= 0.3.4.0 && < 0.4 
   ghc-options: -Wall
 
   hs-source-dirs: src

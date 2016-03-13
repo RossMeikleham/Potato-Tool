@@ -1,6 +1,6 @@
 module Operations (rm, injectDCI, extractDCI, unlockBlocks) where
 
-import Text.Printf
+import Text.Printf()
 import qualified Data.ByteString.Lazy as BS
 import VMU
 import VMUFile

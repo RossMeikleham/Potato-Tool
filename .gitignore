@@ -1,1 +1,3 @@
 *.swp
+.stack-work
+dist/build

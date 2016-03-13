@@ -1,32 +1,12 @@
-module VMU
-( VMU (..)
-, DirectoryEntry (..)
-, FileType (Game, Data)
-, RootBlock (..)
-, Timestamp (..)
-, rawDumpFile
-, getBlocks
-, insertBlocks
-, insertFAT
-, insertDirEntry
-, getFreeBlocks
-, getNFreeBlocks
-, createVMU
-, getDirEntry
-, getEntry
-, exportVMU
-, exportDirEntry
-, splitW16Le
-, clearFile
-) where
+module VMU where
 
-import           Control.Applicative
 import           Data.Bits
 import qualified Data.ByteString.Lazy as BS
 import           Data.Char
 import           Data.List.Split
 import           Data.Maybe
 import           Data.Word
+import           Data.Typeable
 
 -- | Dreamcast VMU filesystem is made up of 255 blocks, each block contains 
 --   512 bytes of data. The blocks in the filesystem are of the following  
@@ -55,7 +35,7 @@ data VMU = VMU
     , fat        :: [Word16]
     , userBlocks :: [[Word8]]
     , unused     :: [Word8] -- blocks 200 - 240 are unused by default
-    } deriving Show
+    } deriving (Show, Typeable)
 
 
 -- | Dreamcast timestamp
@@ -68,7 +48,7 @@ data Timestamp = Timestamp
     , minute    :: Word8
     , second    :: Word8
     , dayOfWeek :: Word8 -- 0 (Monday) - 6 (Sunday)
-    } deriving Show
+    } deriving (Show, Typeable)
 
 
 -- | Data on the Root Block
@@ -87,7 +67,7 @@ data RootBlock = RootBlock
     , userBlocksCount   :: Word16 -- 0x050 - 0x051
     , unknownValues1    :: [Word8] -- 0x40 - 0x45
     , unknownValues2    :: [Word8] -- 0x52 - 0x1FF
-    } deriving Show
+    } deriving (Show, Typeable)
 
 
 -- | Data for each Directory Entry block
@@ -99,13 +79,13 @@ data DirectoryEntry = DirectoryEntry
     , timestamp      :: Timestamp -- 0x10 - 0x17
     , sizeInBlocks   :: Word16 -- 0x18 - 0x19
     , offsetInBlocks :: Word16 -- 0x1A - 0x1B
-    } deriving Show
+    } deriving (Show, Typeable)
 
 
 -- | Files can either be Game files which are standalone
 --   VMU games, or data files typically storing data
 --   from Dreamcast games
-data FileType = Game | Data deriving Show
+data FileType = Game | Data deriving (Show, Typeable)
 
 
 vmuSize :: Int
