@@ -26,13 +26,15 @@ TODO
 
 Required
 ========
-  - [GHC](http://www.haskell.org/haskellwiki/Haskell)
+  - [GHC >= 7](http://www.haskell.org/haskellwiki/Haskell)
   - [Cabal](http://www.haskell.org/cabal/)
+  - [Stack](http://docs.haskellstack.org/en/stable/README/)
 
 Installing
 ==========
  ```
  git clone https://github.com/RossMeikleham/Potato_Tool
  cd Potato_Tool
- cabal install
+ stack build
+ stack install
  ```
