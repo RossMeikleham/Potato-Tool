@@ -159,7 +159,9 @@ instance DefaultClass ContextVMU where
         defSignalNamedParams "vmuError" (Proxy :: Proxy VMUError) (fstName "msg"),
         defMethod "openVMU" openVMU,
         defMethod "saveVMU" saveVMU,
-        defMethod "addVMUSaveFile" addVMUSaveFile]
+        defMethod "addVMUSaveFile" addVMUSaveFile,
+        defMethod "saveVMUSaveFile" saveVMUSaveFile,
+        defMethod "removeSaveFile" removeSaveFile]
 
 
 instance DefaultClass VMU where
@@ -255,12 +257,51 @@ addVMUSaveFile co str = modifyMVar_ vmu (\vRef -> do
         Left err -> do 
             fireSignal (Proxy :: Proxy VMUError) co (TX.pack err)
             return vRef
-        Right v' -> newObjectDC v'
+
+        Right v' -> do 
+            fireSignal (Proxy :: Proxy VMUChanged) co 
+            newObjectDC v'
     ) 
 
   where 
         vmu = _vmu . fromObjRef $ co
         fPath = TX.unpack str
+
+
+-- Attempt to save specified VMU file to disk
+saveVMUSaveFile :: ObjRef ContextVMU -> Int -> TX.Text -> IO ()
+saveVMUSaveFile co fileNo str = do 
+    v' <- readMVar vmu
+    let v = fromObjRef v'
+
+    -- TODO detect + support other formats
+    case (extractDCIFromVMU v fileNo) of
+         Left err ->  fireSignal (Proxy :: Proxy VMUError) co (TX.pack err)
+  
+         Right vmuFile -> BS.writeFile fPath $ BS.pack $ exportVMUFile vmuFile
+  
+  where 
+        vmu = _vmu . fromObjRef $ co
+        fPath = TX.unpack str
+
+
+-- Remove a specified individual file from the VMU
+removeSaveFile :: ObjRef ContextVMU -> Int -> IO ()
+removeSaveFile co fileNo = modifyMVar_ vmu (\vRef -> do
+      let v = fromObjRef vRef
+      
+      case (rmFromVMU fileNo v) of
+        Left err -> do 
+            fireSignal (Proxy :: Proxy VMUError) co (TX.pack err)
+            return vRef
+
+        Right v' -> do 
+            fireSignal (Proxy :: Proxy VMUChanged) co 
+            newObjectDC v'
+    ) 
+
+  where 
+        vmu = _vmu . fromObjRef $ co
 
 
 -- Get a property out of an object reference and return as an IO action

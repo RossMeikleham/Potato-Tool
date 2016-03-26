@@ -254,31 +254,33 @@ TableView {
     }
 
 
-    
-    //Dialog for extracting individual files out of the VMU filesystem
-    FileDialog { 
-        id: fileExtractDialog;
-        title: "Select location to extract file to";
-        selectExisting: false;
-        selectFolder: false;
-        selectMultiple: false;
-        folder: shortcuts.home;
-        nameFilters: ["Nexus DCI format (*.dci)", "test format (*.test)"];
+        // Dialog for extracting individual VMU files to disk
+        FileDialog {
+            id: fileExtractDialog;
+            title: "Select path to save individual VMU file";
+            selectExisting: false;
+            selectFolder: false;
+            selectMultiple: false;
+            folder: shortcuts.home;
+            nameFilters: ["Nexus DCI format (*.dci)"];
+            
+            onAccepted: {
+                close();
+                var path = fileUrl.toString().replace("file://","");
+                saveVMUSaveFile(contextMenu.itemSelected, path);
+            }
 
-        // Save the file
-        onAccepted: {
-            close();
+            onRejected: {
+                close();
+            }
         }
-
-        onRejected: {
-            close();
-        }
-    }
 
 
     // Menu for performing actions on individual files within the filesystem
     Menu {
         id: contextMenu;
+        property int itemSelected;
+
         
         // Extract the selected file from the VMU filesystem
         MenuItem {
@@ -296,6 +298,9 @@ TableView {
         // Delete the selected file from the filesystem
         MenuItem {
             text: "Delete";
+            onTriggered : {
+               removeSaveFile(contextMenu.itemSelected); 
+            }
         }
     }
 
@@ -317,6 +322,7 @@ TableView {
                 anchors.fill: parent
                 acceptedButtons: Qt.RightButton
                 onClicked: {
+                    contextMenu.itemSelected = styleData.row + 1;
                     contextMenu.popup();
                 }
             }       

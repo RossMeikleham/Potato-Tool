@@ -327,12 +327,12 @@ getDirEntry entry =
                 0x33 -> Right Data
                 0xCC -> Right Game
                 0x00 -> Left "File marked as empty"
-                _ -> Left ("Unknown type value" ++ show entry)
+                v -> Left ("Unknown type value " ++ show v)
 
         protected = case entry !! 0x1 of
                 0x00 -> Right False
                 0xFF -> Right True
-                _ -> Left ("Unknown protected value" ++ show entry)
+                v -> Left ("Unknown protected value " ++ show v)
 
         startingB = Right $ encodeWord16 $ slice 0x2 0x3 entry
         name = Right $ map (chr . fromEnum) $ slice 0x4 0xF entry
