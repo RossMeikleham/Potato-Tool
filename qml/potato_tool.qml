@@ -10,6 +10,60 @@ ApplicationWindow {
     title: "Potato Tool";
 
 
+Connections {
+    target: self
+    onVmuError : {
+        errorDialog.text = msg;
+        errorDialog.open();
+    }
+
+    // Re-display everything
+    onVmuChanged : {
+        saveDataModel.clear(); 
+       
+        var formatDate = function(tStamp) {
+            var yearLeft = tStamp.century;
+            var yearStr = ((yearLeft * 100) + tStamp.year).toString();
+            
+    
+            var toDateTimeNum = function(n) {
+                return n < 10 ? "0" + n.toString() : n.toString();
+            };
+
+            var monthStr = toDateTimeNum(tStamp.month); 
+            var dayStr = toDateTimeNum(tStamp.day);
+            var hourStr = toDateTimeNum(tStamp.hour);
+            var minStr = toDateTimeNum(tStamp.minute);
+            var secStr = toDateTimeNum(tStamp.second);
+
+            return dayStr + "/" + monthStr + "/" + yearStr + "  " +
+                   hourStr + ":" + minStr + ":" + secStr;
+        }
+
+        for (var i = 0; i < vmu.files.length; i++) {
+            saveDataModel.append({
+                "name": vmu.files[i].fileName,
+                "type": vmu.files[i].fileType,
+                "blockCount": vmu.files[i].blocks,
+                "startBlock": vmu.files[i].startBlock,
+                "created": formatDate(vmu.files[i].timestamp)
+            });
+        }
+    }
+}
+
+// Error Dialog
+MessageDialog {
+    id: errorDialog;
+    title: "Error";
+    icon: StandardIcon.Critical;
+    standardButtons: StandardButton.Ok;
+    onAccepted: {
+        errorDialog.close();
+    }
+    
+}
+
 // Dialog for loading entire VMUs
 FileDialog { 
     id: vmuLoadDialog;
@@ -18,10 +72,12 @@ FileDialog {
     selectFolder: false;
     selectMultiple: false;
     folder: shortcuts.home;
-    nameFilters: ["VMU files (*.vmu)", "All files (*)"];
+    nameFilters: ["VMU files (*.bin)", "All files (*)"];
 
     // Load the file
     onAccepted: {
+        var path = fileUrl.toString().replace("file://","");
+        openVMU(path);
         close();
     }
 
@@ -29,6 +85,7 @@ FileDialog {
         close();
     }
 }
+
 
 // Dialog for saving entire VMUs
 FileDialog {
@@ -38,10 +95,33 @@ FileDialog {
     selectFolder: false;
     selectMultiple: false;
     folder: shortcuts.home;
-    nameFilters: ["VMU files (*.vmu)", "All files (*)"];
+    nameFilters: ["VMU files (*.bin)", "All files (*)"];
     
     onAccepted: {
         close();
+        var path = fileUrl.toString().replace("file://","");
+        saveVMU(path);
+    }
+
+    onRejected: {
+        close();
+    }
+}
+
+// Dialog for loading individual VMU save files
+FileDialog {
+    id: vmuFileSaveDialog;
+    title: "Select path to load VMU save file";
+    selectExisting: true;
+    selectFolder: false;
+    selectMultiple: false;
+    folder: shortcuts.home;
+    nameFilters: ["Nexus DCI files (*.dci)", "All files (*)"];
+    
+    onAccepted: {
+        close();
+        var path = fileUrl.toString().replace("file://","");
+        addVMUSaveFile(path);
     }
 
     onRejected: {
@@ -83,7 +163,10 @@ FileDialog {
             title: "Edit"
 
             MenuItem {
-                text: "Import Save";        
+                text: "Import Save";
+                onTriggered: {
+                    vmuFileSaveDialog.open()
+                }        
             }
 
             MenuItem {
@@ -113,31 +196,11 @@ Rectangle {
 
 // Dummy List Model to populate the UI for now
 ListModel {
-    id: dummyModel;
-    
-    ListElement {
-        image: "TODO";
-        name: "Test Game";
-        type: "GAME";
-        blockCount: 32;
-        startBlock: 0;
-        created: "11/09/2015 00:02";
-    } 
-    
-       
-    ListElement {
-        image: "TODO";
-        name: "Test Data";
-        type: "DATA";
-        blockCount: 43;
-        startBlock: 50;
-        created: "03/04/2015 01:03";
-    }    
-}
-
+    id: saveDataModel;
+}    
 
 TableView {
-    model: dummyModel;
+    model: saveDataModel;
     selectionMode: SelectionMode.SingleSelection;
     
     anchors {
@@ -149,12 +212,12 @@ TableView {
         
     
     // Icon image for the file
-    TableViewColumn {
+/*    TableViewColumn {
         role: "image";
         title: "Image";
         width: 200;
     }
-
+*/
     // File Name
     TableViewColumn {
         role: "name";
@@ -262,20 +325,3 @@ TableView {
 
 }
 }
-
-
-/*
-Rectangle {
-    id: page
-    width: 320; height: 480
-    color: "lightgray"
-
-    Text {
-        id: helloText
-        text: "Hello world!"
-        y: 30
-        anchors.horizontalCenter: page.horizontalCenter
-        font.pointSize: 24; font.bold: true
-    }
-}
-*/

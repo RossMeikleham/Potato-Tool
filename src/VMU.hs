@@ -1,3 +1,4 @@
+{-# LANGUAGE DeriveDataTypeable, TypeFamilies, OverloadedStrings, StandaloneDeriving, FlexibleInstances #-}
 module VMU where
 
 import           Data.Bits
@@ -7,6 +8,8 @@ import           Data.List.Split
 import           Data.Maybe
 import           Data.Word
 import           Data.Typeable
+import           Data.Time.Clock
+import           Data.Time.Calendar
 
 -- | Dreamcast VMU filesystem is made up of 255 blocks, each block contains 
 --   512 bytes of data. The blocks in the filesystem are of the following  
@@ -81,6 +84,20 @@ data DirectoryEntry = DirectoryEntry
     , offsetInBlocks :: Word16 -- 0x1A - 0x1B
     } deriving (Show, Typeable)
 
+{-
+data FileHeader = FileHeader
+    { shortDescription :: String -- 16 chars
+    , longDescription :: String -- 32 chars
+    , applicationId :: String -- 16 chars
+    , iconCount :: Word16
+    , iconAnimationSpeed :: Word16
+    , eyecatch_type :: Word16
+    , crc :: Word16
+    , dataLength :: Word32
+    , reserved :: [Word8] -- 20 bytes all 0
+    , iconPalette :: [Word16] -- 16 elements
+    } deriving (Show, Typeable)
+-}
 
 -- | Files can either be Game files which are standalone
 --   VMU games, or data files typically storing data
@@ -347,6 +364,7 @@ createFAT rb mem =   map encodeWord16 $ chunksOf 2 fatMem8
           fatMem8 = take (512 * noBlocks) $ drop startFAT mem
 
 
+-- Deserialises a VMU from binary
 createVMU :: BS.ByteString -> Either String VMU
 createVMU bs
     | (int . BS.length) bs /= vmuSize = Left ("VMU is incorrect size (" ++
@@ -364,6 +382,7 @@ createVMU bs
               leftOverBC =  241 - userBlocksCount rb
 
 
+-- Serialises an entire VMU
 exportVMU :: VMU -> [Word8]
 exportVMU vmu = ub ++ eb ++ dirs ++ ft ++ rb
     where
@@ -373,6 +392,7 @@ exportVMU vmu = ub ++ eb ++ dirs ++ ft ++ rb
           dirs = concat $ reverse $ chunksOf 512 $ concatMap exportDirEntry (files vmu)
           rb = exportRootBlock (root vmu)
 
+-- Serialises a directory entry
 exportDirEntry :: Maybe DirectoryEntry -> [Word8]
 exportDirEntry dir = case dir of
     Nothing -> take 32 [0,0..]
@@ -393,6 +413,7 @@ exportDirEntry dir = case dir of
             notUsed = take 4 [0x0,0x0..]
 
 
+-- Serialises a Root Block
 exportRootBlock :: RootBlock -> [Word8]
 exportRootBlock rb = start ++ custom ++ blue ++ green ++
     red ++ alpha ++ padding ++ ts ++ padding2 ++ unknown1 ++
@@ -417,6 +438,7 @@ exportRootBlock rb = start ++ custom ++ blue ++ green ++
         ubc = splitW16Le $ userBlocksCount rb
         unknown2 =unknownValues2 rb
 
+-- Serialises a Timestamp 
 exportTimestamp :: Timestamp -> [Word8]
 exportTimestamp ts = ct ++ yr ++ mnth ++ dy ++ hr ++ m ++ sec ++ dow
     where
@@ -430,3 +452,60 @@ exportTimestamp ts = ct ++ yr ++ mnth ++ dy ++ hr ++ m ++ sec ++ dow
         dow  = [dayOfWeek ts]
 
 
+
+-- Creates a timestamp based on the current system time
+currentTimestamp :: IO Timestamp
+currentTimestamp = do
+    currentTime <- getCurrentTime
+    let (y, mnths, d) = toGregorian $ utctDay currentTime
+    let daySecs = floor (toRational $ utctDayTime currentTime) :: Int
+    
+    let (h, mins, s) = (daySecs `mod` 60
+                      ,(daySecs `div` 60) `mod` 60
+                      ,daySecs `div` 3600
+                      )
+
+    let c = (fromIntegral $ (y - 1) `div` 100) :: Int -- Current Century 
+    let tsYear = (fromIntegral $ y `mod` 100) :: Int -- Last 2 digits of year
+    let weekDay = (d + mnths + tsYear + (tsYear `div` 4) + c + 2) `mod` 7
+
+    return $ Timestamp (fromIntegral c)  
+                       (fromIntegral tsYear)
+                       (fromIntegral mnths)  
+                       (fromIntegral d) 
+                       (fromIntegral h) 
+                       (fromIntegral mins)  
+                       (fromIntegral s) 
+                       (fromIntegral weekDay) 
+
+
+-- Creates a new VMU with given timestamp 
+newVMU :: Timestamp -> VMU
+newVMU ts = VMU {root = newRoot, files = newFiles, fat = newFAT, 
+                 userBlocks = newUserBlocks, unused = newUnused}
+  where
+    newRoot = RootBlock {
+        customVMSColor = False,
+        blueVMS = 0x0,
+        redVMS = 0x0,
+        greenVMS = 0x0,
+        alphaComponent = 0x0,
+        timeStamp = ts,
+        locationFAT = 254,
+        sizeFAT = 1,
+        locationDirectory = 253,
+        sizeDirectory = 13,
+        iconShape = 0,
+        userBlocksCount = 200,
+        unknownValues1 = replicate (0x45 - 0x40 + 1) 0x0, 
+        unknownValues2 = replicate (0x1FF - 0x52 + 1) 0x0
+    }
+
+    newFiles = []
+
+    -- Mark all blocks as unallocated
+    newFAT = replicate 0x100 0xFFFC 
+
+    newUserBlocks = replicate 200 $ replicate 512 0x0
+
+    newUnused = replicate (41 * 512) 0x0 

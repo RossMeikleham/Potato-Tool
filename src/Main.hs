@@ -3,6 +3,7 @@
 module Main where
 
 import qualified Data.ByteString.Lazy as BS
+import qualified Data.Text as TX
 import           Data.Maybe
 import           System.Environment
 import           Text.Printf
@@ -12,6 +13,7 @@ import           Data.Word
 import           Control.Concurrent
 import           Data.Proxy
 import           Graphics.QML
+import           Graphics.QML.Objects.ParamNames
 import           VMU
 import           VMUFile
 import           Operations
@@ -122,42 +124,156 @@ executeCommand command args = case head args of
 
 -}
 
-newtype VMULoaded = VMULoaded (Maybe VMU)
-
-noVMU :: VMULoaded
-noVMU = VMULoaded Nothing
-
-deriving instance Typeable VMULoaded
-
 data ContextVMU = ContextVMU
-                { _vmu :: MVar (ObjRef VMULoaded)
+                { _vmu :: MVar (ObjRef VMU)
                 } deriving Typeable
 
-
 -- Signals
+
+-- VMU updated/changed
 data VMUChanged deriving Typeable
 
 instance SignalKeyClass VMUChanged where
-    type SignalParams VMUChanged = IO ()
+    type SignalParams VMUChanged = (IO ())
+ 
+    
+-- Error occured performing operations with the VMU
+data VMUError deriving Typeable
+
+--instance SignalSuffix IO (TX.Text) where
+--    type SignalParamNames (IO (TX.Text)) = "msg"
+--    mkSignalArgs 
+--    mkSignalTypes 
+
+instance SignalKeyClass VMUError where
+    type SignalParams VMUError = (TX.Text -> IO())
+   -- signalKey f = 
 
 
 instance DefaultClass ContextVMU where
     classMembers = [
-        defPropertySigRO "vmu" (Proxy :: Proxy VMUChanged) $ readMVar . _vmu . fromObjRef
-       ,defMethod "addFile" addFile]
+        defPropertySigRO "self" (Proxy :: Proxy VMUChanged) ((\x -> return x) 
+                :: ObjRef ContextVMU -> IO (ObjRef ContextVMU)),
+
+        defPropertySigRO "vmu" (Proxy :: Proxy VMUChanged) $ readMVar . _vmu . fromObjRef,
+        defSignalNamedParams "vmuError" (Proxy :: Proxy VMUError) (fstName "msg"),
+        defMethod "openVMU" openVMU,
+        defMethod "saveVMU" saveVMU,
+        defMethod "addVMUSaveFile" addVMUSaveFile]
 
 
-addFile :: ObjRef ContextVMU -> IO () 
-addFile co = print "Add File Signalled"
+instance DefaultClass VMU where
+    classMembers = [
+        defPropertyRO "files" $ refDirEntries . files . fromObjRef]
 
-instance DefaultClass VMULoaded where
-    classMembers = []
+        where refDirEntries :: [Maybe DirectoryEntry] -> IO [ObjRef DirectoryEntry]
+              refDirEntries entries = mapM newObjectDC (catMaybes entries)
+
+
+instance DefaultClass DirectoryEntry where
+    classMembers = [
+        defPropertyRO "fileName" $ getStrProperty fileName,
+        defPropertyRO "fileType" $ getStrProperty (show . fileType),
+        defPropertyRO "blocks" $ getProperty (w16ToInt . sizeInBlocks),
+        defPropertyRO "startBlock" $ getProperty (w16ToInt . startingBlock),
+        defPropertyRO "timestamp" $ newObjectDC . timestamp . fromObjRef]
+    
+        where
+          getStrProperty :: (DirectoryEntry -> String) -> ObjRef DirectoryEntry -> IO TX.Text 
+          getStrProperty f = getProperty (TX.pack . f)  
+          
+          w16ToInt :: Word16 -> Int
+          w16ToInt = fromIntegral 
+
+          
+
+instance DefaultClass Timestamp where
+    classMembers = [
+        defPropertyRO "century"   $ getTSProperty century,
+        defPropertyRO "year"      $ getTSProperty year,
+        defPropertyRO "month"     $ getTSProperty month,
+        defPropertyRO "day"       $ getTSProperty day,
+        defPropertyRO "hour"      $ getTSProperty hour,
+        defPropertyRO "minute"    $ getTSProperty minute,
+        defPropertyRO "second"    $ getTSProperty second,
+        defPropertyRO "dayOfWeek" $ getTSProperty dayOfWeek]
+
+        where
+          -- Creation time is stored as a sequence of 16 bit BCD (Binary Coded
+          -- Decimal) values, we convert this to the "proper"
+          -- representation when obtaining the property 
+          getTSProperty :: (Timestamp -> Word8) -> ObjRef Timestamp -> IO Int
+          getTSProperty f = getProperty (fromBCD . f)
+
+          fromBCD :: Word8 -> Int
+          fromBCD n = ((leftDigit `mod` 10) * 10) + (rightDigit `mod` 10)
+            where leftDigit = fromIntegral $ n `shiftR` 4
+                  rightDigit = fromIntegral $ n .&. 0xF
+
+
+------ ContextVMU methods -------
+
+
+-- Attempt to open + load VMU from disk
+openVMU :: ObjRef ContextVMU -> TX.Text -> IO ()
+openVMU co str = do 
+    modifyMVar_ vmu (\vRef -> do
+
+        fileBs <- BS.readFile fPath 
+        case (createVMU fileBs) of
+            Left err -> do 
+                fireSignal (Proxy :: Proxy VMUError) co (TX.pack err)
+                return vRef
+
+            Right newVmu -> newObjectDC newVmu
+        ) 
+    -- TODO change so that this signal is only fired when open is
+    -- successful
+    fireSignal (Proxy :: Proxy VMUChanged) co
+  
+  where 
+        vmu = _vmu . fromObjRef $ co
+        fPath = TX.unpack str
+
+
+-- Attempt to save VMU to disk
+saveVMU :: ObjRef ContextVMU -> TX.Text -> IO ()
+saveVMU co str = do 
+    v <- readMVar vmu
+    BS.writeFile fPath $ BS.pack $ exportVMU $ fromObjRef v
+  where 
+        vmu = _vmu . fromObjRef $ co
+        fPath = TX.unpack str
+
+
+addVMUSaveFile :: ObjRef ContextVMU -> TX.Text ->  IO ()
+addVMUSaveFile co str = modifyMVar_ vmu (\vRef -> do
+      fileBs <- BS.readFile fPath
+      let v = fromObjRef vRef
+      
+      case (injectDCIFile (BS.unpack fileBs) v) of
+        Left err -> do 
+            fireSignal (Proxy :: Proxy VMUError) co (TX.pack err)
+            return vRef
+        Right v' -> newObjectDC v'
+    ) 
+
+  where 
+        vmu = _vmu . fromObjRef $ co
+        fPath = TX.unpack str
+
+
+-- Get a property out of an object reference and return as an IO action
+getProperty :: (a -> b) -> ObjRef a -> IO b           
+getProperty f = return . f . fromObjRef
+
 
 
 main :: IO()
 main = do
-
-    l <- newMVar =<< newObjectDC noVMU -- Start off with no VMU
+    curTime <- currentTimestamp
+    vmu <- return $ newVMU curTime
+    l <- newMVar =<< newObjectDC vmu -- Start off with empty VMU
     tc <- newObjectDC $ ContextVMU l
 
     runEngineLoop defaultEngineConfig {
