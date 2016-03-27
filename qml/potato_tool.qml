@@ -152,7 +152,7 @@ FileDialog {
             MenuItem {
                 text: "New VMU";
                 onTriggered : {
-                    newVMU();
+                    createNewVMU();
                 }
             }
 
