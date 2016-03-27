@@ -140,14 +140,15 @@ instance SignalKeyClass VMUChanged where
 -- Error occured performing operations with the VMU
 data VMUError deriving Typeable
 
---instance SignalSuffix IO (TX.Text) where
---    type SignalParamNames (IO (TX.Text)) = "msg"
---    mkSignalArgs 
---    mkSignalTypes 
-
 instance SignalKeyClass VMUError where
     type SignalParams VMUError = (TX.Text -> IO())
-   -- signalKey f = 
+
+
+-- Info message to deliver when performing operations with the VMU
+data VMUInfoMsg deriving Typeable
+
+instance SignalKeyClass VMUInfoMsg where
+    type SignalParams VMUInfoMsg = (TX.Text -> IO())
 
 
 instance DefaultClass ContextVMU where
@@ -157,12 +158,16 @@ instance DefaultClass ContextVMU where
 
         defPropertySigRO "vmu" (Proxy :: Proxy VMUChanged) $ readMVar . _vmu . fromObjRef,
         defSignalNamedParams "vmuError" (Proxy :: Proxy VMUError) (fstName "msg"),
+        defSignalNamedParams "vmuInfo"  (Proxy :: Proxy VMUInfoMsg) (fstName "msg"),
+
+        defMethod "createNewVMU" createNewVMU,
         defMethod "openVMU" openVMU,
         defMethod "saveVMU" saveVMU,
         defMethod "addVMUSaveFile" addVMUSaveFile,
         defMethod "saveVMUSaveFile" saveVMUSaveFile,
-        defMethod "removeSaveFile" removeSaveFile]
-
+        defMethod "removeSaveFile" removeSaveFile,
+        defMethod "unlockUnusedBlocks" unlockUnusedBlocks,
+        defMethod "lockUnusedBlocks" lockUnusedBlocks]
 
 instance DefaultClass VMU where
     classMembers = [
@@ -214,6 +219,14 @@ instance DefaultClass Timestamp where
 
 
 ------ ContextVMU methods -------
+
+-- Create a newly formatted VMU
+createNewVMU :: ObjRef ContextVMU -> IO ()
+createNewVMU co = do
+    modifyMVar_ vmu (\_ -> currentTimestamp >>= newObjectDC . newVMU)
+    fireSignal (Proxy :: Proxy VMUChanged) co
+  where 
+        vmu = _vmu . fromObjRef $ co
 
 
 -- Attempt to open + load VMU from disk
@@ -304,9 +317,54 @@ removeSaveFile co fileNo = modifyMVar_ vmu (\vRef -> do
         vmu = _vmu . fromObjRef $ co
 
 
+-- Unlock an extra unused 41 blocks of space
+unlockUnusedBlocks :: ObjRef ContextVMU -> IO ()
+unlockUnusedBlocks co = do
+    vmu <- readMVar mVarVMU
+    let currentBlocksUnlocked = userBlocksCount . root . fromObjRef $ vmu 
+    
+    -- Check if blocks are already unlocked
+    if currentBlocksUnlocked == 241 
+        then 
+            fireSignal (Proxy :: Proxy VMUInfoMsg) co alreadyUnlockedMessage 
+        else 
+            case (unlockBlocksFromVMU $ fromObjRef vmu) of
+                Left err -> fireSignal (Proxy :: Proxy VMUError) co (TX.pack err)
+                Right v -> do 
+                    modifyMVar_ mVarVMU (\_ -> newObjectDC v)
+                    fireSignal (Proxy :: Proxy VMUChanged) co
+  where 
+    mVarVMU = _vmu . fromObjRef $ co
+    alreadyUnlockedMessage = "Unused blocks are already unlocked." 
+
+
+-- Lock the "extra" 41 blocks of space
+-- TODO check if data stored in these blocks before locking
+-- and display a confirmation dialog in this case
+lockUnusedBlocks :: ObjRef ContextVMU -> IO ()
+lockUnusedBlocks co = do
+    vmu <- readMVar mVarVMU
+    let currentBlocksUnlocked = userBlocksCount . root . fromObjRef $ vmu 
+    
+    -- Check if blocks are already locked
+    if currentBlocksUnlocked == 200
+        then 
+            fireSignal (Proxy :: Proxy VMUInfoMsg) co alreadyUnlockedMessage 
+        else 
+            case (lockBlocksFromVMU $ fromObjRef vmu) of
+                Left err -> fireSignal (Proxy :: Proxy VMUError) co (TX.pack err)
+                Right v -> do 
+                    modifyMVar_ mVarVMU (\_ -> newObjectDC v)
+                    fireSignal (Proxy :: Proxy VMUChanged) co
+  where 
+    mVarVMU = _vmu . fromObjRef $ co
+    alreadyUnlockedMessage = "Extra blocks are already locked."
+
+
 -- Get a property out of an object reference and return as an IO action
 getProperty :: (a -> b) -> ObjRef a -> IO b           
 getProperty f = return . f . fromObjRef
+
 
 
 

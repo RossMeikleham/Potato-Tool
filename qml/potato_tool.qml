@@ -17,6 +17,11 @@ Connections {
         errorDialog.open();
     }
 
+    onVmuInfo : {
+        infoDialog.text = msg;
+        infoDialog.open();
+    }
+
     // Re-display everything
     onVmuChanged : {
         saveDataModel.clear(); 
@@ -62,6 +67,17 @@ MessageDialog {
         errorDialog.close();
     }
     
+}
+
+// Info Dialog
+MessageDialog {
+    id: infoDialog;
+    title: "Info";
+    icon: StandardIcon.Information;
+    standardButtons: StandardButton.Ok;
+    onAccepted: {
+        infoDialog.close();       
+    }
 }
 
 // Dialog for loading entire VMUs
@@ -135,6 +151,9 @@ FileDialog {
             
             MenuItem {
                 text: "New VMU";
+                onTriggered : {
+                    newVMU();
+                }
             }
 
             MenuItem {
@@ -165,16 +184,22 @@ FileDialog {
             MenuItem {
                 text: "Import Save";
                 onTriggered: {
-                    vmuFileSaveDialog.open()
+                    vmuFileSaveDialog.open();
                 }        
             }
 
             MenuItem {
-                text: "Unlock Extra Blocks";
+                text: "Unlock Unused Blocks";
+                onTriggered: {
+                    unlockUnusedBlocks();
+                }
             }
 
             MenuItem {
-                text: "Lock Extra Blocks";
+                text: "Lock Unused Blocks";
+                onTriggered: {
+                    lockUnusedBlocks();
+                }
             }
         } 
     }
