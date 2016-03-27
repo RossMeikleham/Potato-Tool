@@ -5,6 +5,8 @@ module Main where
 import qualified Data.ByteString.Lazy as BS
 import qualified Data.Text as TX
 import           Data.Maybe
+import Control.Monad.Except
+import System.IO.Error
 import           System.Environment
 import           Text.Printf
 import           Data.Typeable as T
@@ -232,20 +234,20 @@ createNewVMU co = do
 -- Attempt to open + load VMU from disk
 openVMU :: ObjRef ContextVMU -> TX.Text -> IO ()
 openVMU co str = do 
-    modifyMVar_ vmu (\vRef -> do
 
-        fileBs <- BS.readFile fPath 
-        case (createVMU fileBs) of
-            Left err -> do 
-                fireSignal (Proxy :: Proxy VMUError) co (TX.pack err)
-                return vRef
-
-            Right newVmu -> newObjectDC newVmu
-        ) 
-    -- TODO change so that this signal is only fired when open is
-    -- successful
-    fireSignal (Proxy :: Proxy VMUChanged) co
-  
+   fileContent <- liftIO $ tryIOError (BS.readFile fPath)
+   case fileContent of
+       Left err -> fireSignal (Proxy :: Proxy VMUError) co (TX.pack $ show err) 
+       
+       Right content -> do
+           case (createVMU content) of
+                    Left err -> fireSignal (Proxy :: Proxy VMUError) co (TX.pack err)
+                    
+                    -- Load VMU and update display         
+                    Right newVmu -> do 
+                        modifyMVar_ vmu (\_ -> newObjectDC newVmu)
+                        fireSignal (Proxy :: Proxy VMUChanged) co
+    
   where 
         vmu = _vmu . fromObjRef $ co
         fPath = TX.unpack str
@@ -255,27 +257,31 @@ openVMU co str = do
 saveVMU :: ObjRef ContextVMU -> TX.Text -> IO ()
 saveVMU co str = do 
     v <- readMVar vmu
-    BS.writeFile fPath $ BS.pack $ exportVMU $ fromObjRef v
+    result <- liftIO $ tryIOError $ BS.writeFile fPath $ BS.pack $ exportVMU $ fromObjRef v
+    case result of
+       Left err -> fireSignal (Proxy :: Proxy VMUError) co (TX.pack $ show err) 
+       Right _ -> return ()
   where 
         vmu = _vmu . fromObjRef $ co
         fPath = TX.unpack str
 
 
+-- Attempt to import a save file into the current VMU
 addVMUSaveFile :: ObjRef ContextVMU -> TX.Text ->  IO ()
-addVMUSaveFile co str = modifyMVar_ vmu (\vRef -> do
-      fileBs <- BS.readFile fPath
-      let v = fromObjRef vRef
-      
-      case (injectDCIFile (BS.unpack fileBs) v) of
-        Left err -> do 
-            fireSignal (Proxy :: Proxy VMUError) co (TX.pack err)
-            return vRef
-
-        Right v' -> do 
-            fireSignal (Proxy :: Proxy VMUChanged) co 
-            newObjectDC v'
-    ) 
-
+addVMUSaveFile co str = do 
+      fileContent <- liftIO $ tryIOError $ BS.readFile fPath
+      case fileContent of 
+        Left err -> fireSignal (Proxy :: Proxy VMUError) co (TX.pack $ show err)
+        
+        Right content -> do
+                v <- readMVar vmu  
+                case (injectDCIFile (BS.unpack content) (fromObjRef v)) of
+                    Left err -> fireSignal (Proxy :: Proxy VMUError) co (TX.pack err)
+                    
+                    Right v' -> do 
+                        modifyMVar_ vmu (\_ -> newObjectDC v')
+                        fireSignal (Proxy :: Proxy VMUChanged) co 
+   
   where 
         vmu = _vmu . fromObjRef $ co
         fPath = TX.unpack str
@@ -289,9 +295,14 @@ saveVMUSaveFile co fileNo str = do
 
     -- TODO detect + support other formats
     case (extractDCIFromVMU v fileNo) of
-         Left err ->  fireSignal (Proxy :: Proxy VMUError) co (TX.pack err)
+         Left err ->  fireSignal (Proxy :: Proxy VMUError) co (TX.pack $ show err)
   
-         Right vmuFile -> BS.writeFile fPath $ BS.pack $ exportVMUFile vmuFile
+         Right vmuFile -> do
+            writeResult <- liftIO $ tryIOError $ BS.writeFile fPath $ 
+                                     BS.pack $ exportVMUFile vmuFile
+            case writeResult of
+                Left err -> fireSignal (Proxy :: Proxy VMUError) co (TX.pack $ show err)
+                Right _ -> return ()
   
   where 
         vmu = _vmu . fromObjRef $ co
